@@ -8,7 +8,7 @@ import type { SyncStatusDto, SyncProgressEvent, SyncPullResult } from '@shared/s
 import { TICKTICK_SETTING_KEYS } from '@shared/ticktickCredentials'
 import { getRepositories } from '../db/connection'
 import { SyncStateRepository } from '../db/repositories/SyncStateRepository'
-import { notifyChanged } from '../ipc/notify'
+import { notifySyncComplete } from '../ipc/notify'
 import { IPC_CHANNELS } from '@shared/channels'
 import { BrowserWindow } from 'electron'
 import { remoteFolderToLocal, remoteProjectToLocal, remoteTaskToLocal } from './mappers'
@@ -34,6 +34,8 @@ export class SyncEngine {
   private lastPullResult: SyncStatusDto['lastSyncResult'] = null
   private lastErrorAt: string | null = null
   private lastPullStats: SyncStatusDto['lastPullStats'] = null
+  private lastStatusBroadcastAt = 0
+  private statusBroadcastTimer: ReturnType<typeof setTimeout> | null = null
 
   private syncState(): SyncStateRepository {
     return new SyncStateRepository(getRepositories().db)
@@ -92,7 +94,26 @@ export class SyncEngine {
   }
 
   broadcastStatus(): void {
+    this.lastStatusBroadcastAt = Date.now()
+    if (this.statusBroadcastTimer) {
+      clearTimeout(this.statusBroadcastTimer)
+      this.statusBroadcastTimer = null
+    }
     emitToRenderers(IPC_CHANNELS.SYNC_STATUS_CHANGED, this.getStatus())
+  }
+
+  /** Progress ticks only need status occasionally; always flush on start/end via broadcastStatus(). */
+  private broadcastStatusThrottled(minIntervalMs = 500): void {
+    const elapsed = Date.now() - this.lastStatusBroadcastAt
+    if (elapsed >= minIntervalMs) {
+      this.broadcastStatus()
+      return
+    }
+    if (this.statusBroadcastTimer) return
+    this.statusBroadcastTimer = setTimeout(() => {
+      this.statusBroadcastTimer = null
+      this.broadcastStatus()
+    }, minIntervalMs - elapsed)
   }
 
   private getPendingPushCounts(): SyncStatusDto['pendingPush'] {
@@ -128,7 +149,7 @@ export class SyncEngine {
   private setProgress(progress: SyncProgressEvent): void {
     this.currentOperation = progress.message ?? null
     emitToRenderers(IPC_CHANNELS.SYNC_PROGRESS, progress)
-    this.broadcastStatus()
+    this.broadcastStatusThrottled()
   }
 
   async runFullPull(): Promise<SyncPullResult> {
@@ -206,9 +227,7 @@ export class SyncEngine {
           .run()
       }
 
-      notifyChanged({ entityType: 'folder', reason: 'sync' })
-      notifyChanged({ entityType: 'project', reason: 'sync' })
-      notifyChanged({ entityType: 'task', reason: 'sync' })
+      notifySyncComplete()
 
       this.persistMeta()
       this.broadcastStatus()
@@ -378,10 +397,7 @@ export class SyncEngine {
         tokens.usingPat() ? 'Personal access token' : 'TickTick account',
       )
 
-      notifyChanged({ entityType: 'folder', reason: 'sync' })
-      notifyChanged({ entityType: 'project', reason: 'sync' })
-      notifyChanged({ entityType: 'task', reason: 'sync' })
-      notifyChanged({ entityType: 'tag', reason: 'sync' })
+      notifySyncComplete()
 
       const result: SyncPullResult = {
         ok: true,

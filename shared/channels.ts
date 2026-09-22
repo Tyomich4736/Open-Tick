@@ -16,6 +16,7 @@ export const IPC_CHANNELS = {
   FOLDER_REORDER: 'folder:reorder',
 
   TASK_LIST: 'task:list',
+  TASK_COUNT: 'task:count',
   TASK_GET: 'task:get',
   TASK_CREATE: 'task:create',
   TASK_UPDATE: 'task:update',

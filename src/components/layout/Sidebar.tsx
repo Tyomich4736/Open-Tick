@@ -25,7 +25,7 @@ import {
   useProjects,
 } from '@/hooks/useProjects'
 import { useProjectMutations } from '@/hooks/useTaskMutations'
-import { useTags, useTasks } from '@/hooks/useTasks'
+import { useTags, useTaskCount } from '@/hooks/useTasks'
 import { Collapse } from '@/components/ui/Collapse'
 import { useUiStore } from '@/stores/uiStore'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -186,8 +186,8 @@ export function Sidebar({
   const { updateProject, reorderProjects } = useProjectMutations()
   const { sections, toggleSection } = useSidebarSections()
   const userProjects = useNonInboxProjects(projects)
-  const { data: todayTasks = [] } = useTasks({ smart_list: 'today', parent_id: null })
-  const { data: overdueTasks = [] } = useTasks({ smart_list: 'overdue', parent_id: null })
+  const { data: todayCount = 0 } = useTaskCount({ smart_list: 'today', parent_id: null })
+  const { data: overdueCount = 0 } = useTaskCount({ smart_list: 'overdue', parent_id: null })
   const location = useLocation()
   const [drag, setDrag] = useState<DragPayload | null>(null)
 
@@ -216,14 +216,14 @@ export function Sidebar({
 
   const smartLists = [
     { to: '/inbox', label: 'Inbox', icon: Inbox },
-    { to: '/today', label: 'Today', icon: Sun, badge: todayTasks.length },
+    { to: '/today', label: 'Today', icon: Sun, badge: todayCount },
     { to: '/tomorrow', label: 'Tomorrow', icon: CalendarDays },
     { to: '/week', label: 'Next 7 Days', icon: CalendarRange },
     {
       to: '/overdue',
       label: 'Overdue',
       icon: AlertCircle,
-      badge: overdueTasks.length,
+      badge: overdueCount,
     },
     { to: '/completed', label: 'Completed', icon: CheckCircle2 },
   ] as const

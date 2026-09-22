@@ -64,6 +64,7 @@ export interface TickTickApi {
 
   tasks: {
     list: (filter?: TaskFilter) => Promise<IpcResult<TaskListItem[]>>
+    count: (filter?: TaskFilter) => Promise<IpcResult<number>>
     get: (id: string) => Promise<IpcResult<TaskDetail>>
     create: (input: CreateTaskInput) => Promise<IpcResult<Task>>
     update: (id: string, input: UpdateTaskInput) => Promise<IpcResult<Task>>

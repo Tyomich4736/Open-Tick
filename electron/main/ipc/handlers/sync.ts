@@ -2,7 +2,7 @@ import type { SyncProgressEvent, SyncPullResult, SyncStatusDto } from '@shared/s
 import { getSyncEngine } from '../../sync/SyncEngine'
 import { getRepositories } from '../../db/connection'
 import { runIpcHandler, runIpcHandlerAsync } from '../ipcWrapper'
-import { notifyChanged } from '../notify'
+import { notifySyncComplete } from '../notify'
 
 export function handleSyncGetStatus() {
   return runIpcHandler((): SyncStatusDto => getSyncEngine().getStatus())
@@ -40,10 +40,7 @@ export async function handleSyncFullResetAndPull() {
     })
     wipe()
 
-    notifyChanged({ entityType: 'folder', reason: 'sync' })
-    notifyChanged({ entityType: 'project', reason: 'sync' })
-    notifyChanged({ entityType: 'task', reason: 'sync' })
-    notifyChanged({ entityType: 'tag', reason: 'sync' })
+    notifySyncComplete()
 
     return getSyncEngine().runFullPull()
   })

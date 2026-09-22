@@ -43,6 +43,7 @@ import {
   handleTaskBulkUpdate,
   handleTaskGet,
   handleTaskList,
+  handleTaskCount,
   handleTaskReorder,
   handleTaskUncomplete,
   handleTaskUpdate,
@@ -99,6 +100,7 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle(IPC_CHANNELS.TASK_LIST, (_event, filter) => handleTaskList(filter))
+  ipcMain.handle(IPC_CHANNELS.TASK_COUNT, (_event, filter) => handleTaskCount(filter))
   ipcMain.handle(IPC_CHANNELS.TASK_GET, (_event, id: string) => handleTaskGet(id))
   ipcMain.handle(IPC_CHANNELS.TASK_CREATE, (_event, input) => handleTaskCreate(input))
   ipcMain.handle(IPC_CHANNELS.TASK_UPDATE, (_event, id: string, input) =>

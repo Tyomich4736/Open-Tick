@@ -5,6 +5,8 @@ import type { ReminderInput } from '@shared/recurrence'
 import { useTaskDetail, useTags, useSubtasks } from '@/hooks/useTasks'
 import { useProjects } from '@/hooks/useProjects'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
+import { useTimeFormat } from '@/hooks/useTimeFormat'
+import { useListDensity } from '@/hooks/useLayoutSettings'
 import { useUiStore } from '@/stores/uiStore'
 import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
 import { useCalendarStore } from '@/stores/calendarStore'
@@ -182,6 +184,8 @@ export function TaskDetailPanel({
   const { data: tags = [] } = useTags()
   const { data: subtasks = [] } = useSubtasks(activeId ?? '', Boolean(activeId))
   const { updateTask, toggleComplete, createTask } = useTaskMutations()
+  const { timeFormat } = useTimeFormat()
+  const { density } = useListDensity()
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [fadeKey, setFadeKey] = useState(activeId)
   const subtaskInputRef = useRef<HTMLInputElement>(null)
@@ -340,7 +344,8 @@ export function TaskDetailPanel({
                 <TaskRow
                   key={sub.id}
                   task={sub}
-                  selected={false}
+                  timeFormat={timeFormat}
+                  density={density}
                   onSelect={() => {
                     if (variant === 'modal') {
                       useCalendarStore.getState().openTaskPopup(sub.id)

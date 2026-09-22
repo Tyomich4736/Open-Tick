@@ -39,6 +39,8 @@ export const ipc = {
   tasks: {
     list: (filter?: Parameters<Window['ticktick']['tasks']['list']>[0]) =>
       getApi().tasks.list(filter),
+    count: (filter?: Parameters<Window['ticktick']['tasks']['count']>[0]) =>
+      getApi().tasks.count(filter),
     get: (id: string) => getApi().tasks.get(id),
     create: (input: Parameters<Window['ticktick']['tasks']['create']>[0]) =>
       getApi().tasks.create(input),

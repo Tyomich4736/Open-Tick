@@ -15,6 +15,7 @@ export const queryKeys = {
   project: (id: string) => ['projects', id] as const,
   folders: ['folders'] as const,
   tasks: (filter: Record<string, unknown>) => ['tasks', filter] as const,
+  taskCount: (filter: Record<string, unknown>) => ['tasks', 'count', filter] as const,
   task: (id: string) => ['tasks', 'detail', id] as const,
   subtasks: (parentId: string) => ['tasks', 'subtasks', parentId] as const,
   tags: ['tags'] as const,

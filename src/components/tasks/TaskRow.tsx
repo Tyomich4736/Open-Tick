@@ -1,24 +1,28 @@
 import { memo } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { TaskListItem } from '@shared/entities'
+import type { TimeFormat } from '@/hooks/useTimeFormat'
 import { formatDueRange, isOverdue } from '@/lib/formatDueDate'
 import { priorityTextColor } from '@/lib/priority'
-import { resolveProjectColor } from '@/lib/theme'
-import { useTimeFormat } from '@/hooks/useTimeFormat'
-import { useListDensity } from '@/hooks/useLayoutSettings'
+import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
+
+export type ListDensity = 'comfortable' | 'compact'
 
 interface TaskRowProps {
   task: TaskListItem
-  selected: boolean
   depth?: number
+  timeFormat: TimeFormat
+  density: ListDensity
   draggable?: boolean
   dragging?: boolean
+  /** Drop highlight for this row only — null for most rows so memo can skip. */
+  dropHighlight?: 'before' | 'after' | 'into' | null
+  expanded?: boolean
+  onToggleExpand?: () => void
   onDragStart?: (e: React.DragEvent) => void
   onDragEnd?: () => void
   onDragOver?: (e: React.DragEvent) => void
   onDrop?: (e: React.DragEvent) => void
-  expanded?: boolean
-  onToggleExpand?: () => void
   onSelect: (e: React.MouseEvent | React.KeyboardEvent) => void
   onToggleComplete: () => void
   onContextMenu?: (e: React.MouseEvent) => void
@@ -26,22 +30,23 @@ interface TaskRowProps {
 
 export const TaskRow = memo(function TaskRow({
   task,
-  selected,
   depth = 0,
+  timeFormat,
+  density,
   draggable = false,
   dragging = false,
+  dropHighlight = null,
+  expanded,
+  onToggleExpand,
   onDragStart,
   onDragEnd,
   onDragOver,
   onDrop,
-  expanded,
-  onToggleExpand,
   onSelect,
   onToggleComplete,
   onContextMenu,
 }: TaskRowProps) {
-  const { timeFormat } = useTimeFormat()
-  const { density } = useListDensity()
+  const selected = useTaskSelectionStore((s) => s.selectedIds.includes(task.id))
   const dueLabel = formatDueRange(
     {
       due_date: task.due_date,
@@ -57,7 +62,7 @@ export const TaskRow = memo(function TaskRow({
   const padY = compact ? 'py-1.5' : 'py-2.5'
   const titleColor = completed ? undefined : priorityTextColor(task.priority)
 
-  return (
+  const row = (
     <div
       role="button"
       tabIndex={0}
@@ -168,4 +173,37 @@ export const TaskRow = memo(function TaskRow({
       )}
     </div>
   )
+
+  if (!dropHighlight) return row
+
+  return (
+    <div>
+      {dropHighlight === 'before' && <DropPlaceholder depth={depth} />}
+      <div
+        className={
+          dropHighlight === 'into'
+            ? 'rounded-md bg-accent/10 ring-2 ring-inset ring-accent'
+            : undefined
+        }
+      >
+        {row}
+      </div>
+      {dropHighlight === 'after' && <DropPlaceholder depth={depth} />}
+    </div>
+  )
 })
+
+function DropPlaceholder({ depth = 0 }: { depth?: number }) {
+  return (
+    <div
+      className="pointer-events-none relative z-10 h-0"
+      style={{ marginLeft: `${16 + depth * 20}px` }}
+      aria-hidden
+    >
+      <div className="absolute inset-x-4 -top-px flex items-center">
+        <span className="size-2 shrink-0 rounded-full bg-accent" />
+        <span className="h-0.5 flex-1 rounded-full bg-accent" />
+      </div>
+    </div>
+  )
+}

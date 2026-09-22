@@ -13,3 +13,8 @@ export function notifyChanged(notification: ChangeNotification): void {
     }
   }
 }
+
+/** Single event after pull/push so the renderer invalidates once, not four times. */
+export function notifySyncComplete(): void {
+  notifyChanged({ entityType: 'all', reason: 'sync' })
+}

@@ -808,10 +808,19 @@ export class TaskRepository {
           t.id, t.title, t.status, t.priority, t.due_date, t.start_date, t.is_all_day,
           t.project_id, t.recurrence_rule,
           p.name as project_name, p.color as project_color, p.is_inbox as project_is_inbox,
-          (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.deleted_at IS NULL) as subtask_count,
-          (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.deleted_at IS NULL AND s.status = 'completed') as completed_subtask_count
+          COALESCE(sc.subtask_count, 0) as subtask_count,
+          COALESCE(sc.completed_subtask_count, 0) as completed_subtask_count
          FROM tasks t
          INNER JOIN projects p ON p.id = t.project_id
+         LEFT JOIN (
+           SELECT
+             parent_id,
+             COUNT(*) as subtask_count,
+             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_subtask_count
+           FROM tasks
+           WHERE deleted_at IS NULL AND parent_id IS NOT NULL
+           GROUP BY parent_id
+         ) sc ON sc.parent_id = t.id
          WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL
          ${where}
          ORDER BY ${orderBy}`,
@@ -839,6 +848,21 @@ export class TaskRepository {
       completed_subtask_count: row.completed_subtask_count,
       recurrence_rule: parseRecurrence(row.recurrence_rule),
     }))
+  }
+
+  /** Count matching tasks without loading rows (sidebar badges, etc.). */
+  count(filter: TaskFilter = {}): number {
+    const { where, params } = this.buildFilterQuery(filter)
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) as c
+         FROM tasks t
+         INNER JOIN projects p ON p.id = t.project_id
+         WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL
+         ${where}`,
+      )
+      .get(...params) as { c: number }
+    return row?.c ?? 0
   }
 
   private buildFilterQuery(filter: TaskFilter): {

@@ -26,6 +26,7 @@ const api: TickTickApi = {
 
   tasks: {
     list: (filter) => ipcRenderer.invoke(IPC_CHANNELS.TASK_LIST, filter),
+    count: (filter) => ipcRenderer.invoke(IPC_CHANNELS.TASK_COUNT, filter),
     get: (id) => ipcRenderer.invoke(IPC_CHANNELS.TASK_GET, id),
     create: (input) => ipcRenderer.invoke(IPC_CHANNELS.TASK_CREATE, input),
     update: (id, input) => ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE, id, input),

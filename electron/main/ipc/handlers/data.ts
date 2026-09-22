@@ -106,6 +106,10 @@ export function handleTaskList(filter?: TaskFilter) {
   return runIpcHandler(() => getRepositories().tasks.list(filter ?? {}))
 }
 
+export function handleTaskCount(filter?: TaskFilter) {
+  return runIpcHandler(() => getRepositories().tasks.count(filter ?? {}))
+}
+
 export function handleTaskGet(id: string) {
   return runIpcHandler(() => {
     const repos = getRepositories()
@@ -121,7 +125,6 @@ export function handleTaskCreate(input: CreateTaskInput) {
   return runIpcHandler(() => {
     const task = getRepositories().tasks.create(input)
     notifyChanged({ entityType: 'task', entityId: task.id, reason: 'local' })
-    getSyncEngine().broadcastStatus()
     return task
   })
 }
@@ -130,7 +133,6 @@ export function handleTaskUpdate(id: string, input: UpdateTaskInput) {
   return runIpcHandler(() => {
     const task = getRepositories().tasks.update(id, input)
     notifyChanged({ entityType: 'task', entityId: task.id, reason: 'local' })
-    getSyncEngine().broadcastStatus()
     return task
   })
 }
@@ -139,7 +141,6 @@ export function handleTaskComplete(id: string) {
   return runIpcHandler(() => {
     const task = getRepositories().tasks.complete(id)
     notifyChanged({ entityType: 'task', entityId: task.id, reason: 'local' })
-    getSyncEngine().broadcastStatus()
     return task
   })
 }
@@ -148,7 +149,6 @@ export function handleTaskUncomplete(id: string) {
   return runIpcHandler(() => {
     const task = getRepositories().tasks.uncomplete(id)
     notifyChanged({ entityType: 'task', entityId: task.id, reason: 'local' })
-    getSyncEngine().broadcastStatus()
     return task
   })
 }
@@ -157,7 +157,6 @@ export function handleTaskReorder(orderedIds: string[]) {
   return runIpcHandler(() => {
     getRepositories().tasks.reorder(orderedIds)
     notifyChanged({ entityType: 'task', reason: 'local' })
-    getSyncEngine().broadcastStatus()
   })
 }
 
@@ -166,7 +165,6 @@ export function handleTaskDelete(id: string) {
     getRepositories().tasks.softDelete(id)
     closeStickyWindow(id)
     notifyChanged({ entityType: 'task', entityId: id, reason: 'local' })
-    getSyncEngine().broadcastStatus()
   })
 }
 
@@ -174,7 +172,6 @@ export function handleTaskDuplicate(id: string) {
   return runIpcHandler(() => {
     const task = getRepositories().tasks.duplicate(id)
     notifyChanged({ entityType: 'task', entityId: task.id, reason: 'local' })
-    getSyncEngine().broadcastStatus()
     return task
   })
 }
@@ -183,7 +180,6 @@ export function handleTaskBulkUpdate(ids: string[], patch: BulkTaskPatch) {
   return runIpcHandler(() => {
     const tagsById = getRepositories().tasks.bulkUpdate(ids, patch)
     notifyChanged({ entityType: 'task', reason: 'local' })
-    getSyncEngine().broadcastStatus()
     return tagsById
   })
 }
@@ -193,7 +189,6 @@ export function handleTaskBulkDelete(ids: string[]) {
     getRepositories().tasks.bulkDelete(ids)
     for (const id of ids) closeStickyWindow(id)
     notifyChanged({ entityType: 'task', reason: 'local' })
-    getSyncEngine().broadcastStatus()
   })
 }
 
@@ -201,7 +196,6 @@ export function handleTaskBulkComplete(ids: string[], completed: boolean) {
   return runIpcHandler(() => {
     getRepositories().tasks.bulkComplete(ids, completed)
     notifyChanged({ entityType: 'task', reason: 'local' })
-    getSyncEngine().broadcastStatus()
   })
 }
 

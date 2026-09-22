@@ -182,7 +182,7 @@ export interface CreateTagInput {
 }
 
 export interface ChangeNotification {
-  entityType: 'task' | 'project' | 'tag' | 'folder'
+  entityType: 'task' | 'project' | 'tag' | 'folder' | 'all'
   entityId?: string
   reason: 'local' | 'sync'
 }

@@ -3,11 +3,18 @@ import type {
   BulkTaskPatch,
   CreateProjectInput,
   CreateTaskInput,
+  TaskStatus,
   UpdateProjectInput,
   UpdateTaskInput,
 } from '@shared/entities'
 import { ipc } from '@/lib/ipc-client'
 import { ipcCall } from '@/lib/ipcResult'
+import {
+  invalidateTaskQueries,
+  reorderTaskListCaches,
+  setTaskStatusInCaches,
+  suppressTaskInvalidation,
+} from '@/lib/taskQueryCache'
 import { useToastStore } from '@/stores/toastStore'
 import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
 
@@ -15,15 +22,16 @@ export function useTaskMutations() {
   const queryClient = useQueryClient()
   const addToast = useToastStore((s) => s.addToast)
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+  const invalidateLists = () => {
+    suppressTaskInvalidation()
+    invalidateTaskQueries(queryClient)
   }
 
   const createTask = useMutation({
     mutationFn: (input: CreateTaskInput) =>
       ipcCall(() => ipc.tasks.create(input), 'Failed to create task'),
     onSuccess: (task) => {
-      invalidate()
+      invalidateLists()
       if (task) {
         useTaskSelectionStore.getState().selectOne(task.id)
         addToast('Task created', 'success')
@@ -34,7 +42,7 @@ export function useTaskMutations() {
   const duplicateTask = useMutation({
     mutationFn: (id: string) => ipcCall(() => ipc.tasks.duplicate(id), 'Failed to duplicate task'),
     onSuccess: (task) => {
-      invalidate()
+      invalidateLists()
       if (task) {
         useTaskSelectionStore.getState().selectOne(task.id)
         addToast('Task duplicated', 'success')
@@ -45,7 +53,7 @@ export function useTaskMutations() {
   const updateTask = useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateTaskInput }) =>
       ipcCall(() => ipc.tasks.update(id, input), 'Failed to update task'),
-    // Cache refresh comes once from sync:changed — avoid a second invalidate that flashes the list
+    // Cache refresh comes from sync:changed (debounced) — avoid double list flash
   })
 
   const toggleComplete = useMutation({
@@ -54,13 +62,36 @@ export function useTaskMutations() {
         () => (completed ? ipc.tasks.uncomplete(id) : ipc.tasks.complete(id)),
         'Failed to update task',
       ),
-    onSuccess: invalidate,
+    onMutate: async ({ id, completed }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      const nextStatus: TaskStatus = completed ? 'pending' : 'completed'
+      setTaskStatusInCaches(queryClient, id, nextStatus)
+      suppressTaskInvalidation(200)
+      const previousStatus: TaskStatus = completed ? 'completed' : 'pending'
+      return { id, previousStatus }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) setTaskStatusInCaches(queryClient, ctx.id, ctx.previousStatus)
+    },
+    onSuccess: (_data, { id }) => {
+      suppressTaskInvalidation(200)
+      void queryClient.invalidateQueries({
+        queryKey: ['tasks', 'detail', id],
+        refetchType: 'active',
+      })
+      // One list/count refresh so filtered smart lists drop completed rows (IPC notify suppressed)
+      void queryClient.invalidateQueries({
+        queryKey: ['tasks'],
+        refetchType: 'active',
+        predicate: (q) => q.queryKey[1] !== 'detail' && q.queryKey[1] !== 'subtasks',
+      })
+    },
   })
 
   const deleteTask = useMutation({
     mutationFn: (id: string) => ipcCall(() => ipc.tasks.delete(id), 'Failed to delete task'),
     onSuccess: () => {
-      invalidate()
+      invalidateLists()
       useTaskSelectionStore.getState().clear()
       addToast('Task deleted', 'success')
     },
@@ -69,7 +100,22 @@ export function useTaskMutations() {
   const reorderTasks = useMutation({
     mutationFn: (orderedIds: string[]) =>
       ipcCall(() => ipc.tasks.reorder(orderedIds), 'Failed to reorder tasks'),
-    onSuccess: invalidate,
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      const previous = queryClient.getQueriesData<unknown>({ queryKey: ['tasks'] })
+      reorderTaskListCaches(queryClient, orderedIds)
+      suppressTaskInvalidation(200)
+      return { previous }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx?.previous) return
+      for (const [key, data] of ctx.previous) {
+        queryClient.setQueryData(key, data)
+      }
+    },
+    onSuccess: () => {
+      suppressTaskInvalidation(200)
+    },
   })
 
   const bulkUpdate = useMutation({
@@ -85,7 +131,7 @@ export function useTaskMutations() {
           })
         })
       }
-      invalidate()
+      invalidateLists()
       const n = vars.ids.length
       if (vars.patch.project_id) {
         useTaskSelectionStore.getState().clear()
@@ -105,8 +151,14 @@ export function useTaskMutations() {
   const bulkComplete = useMutation({
     mutationFn: ({ ids, completed }: { ids: string[]; completed: boolean }) =>
       ipcCall(() => ipc.tasks.bulkComplete(ids, completed), 'Failed to update tasks'),
+    onMutate: async ({ ids, completed }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      const nextStatus = completed ? 'completed' : 'pending'
+      for (const id of ids) setTaskStatusInCaches(queryClient, id, nextStatus)
+      suppressTaskInvalidation(200)
+    },
     onSuccess: (_data, vars) => {
-      invalidate()
+      invalidateLists()
       const n = vars.ids.length
       addToast(
         vars.completed
@@ -121,7 +173,7 @@ export function useTaskMutations() {
     mutationFn: (ids: string[]) =>
       ipcCall(() => ipc.tasks.bulkDelete(ids), 'Failed to delete tasks'),
     onSuccess: (_data, ids) => {
-      invalidate()
+      invalidateLists()
       useTaskSelectionStore.getState().clear()
       const n = ids.length
       addToast(`Deleted ${n} task${n === 1 ? '' : 's'}`, 'success')

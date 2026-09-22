@@ -29,6 +29,14 @@ export function useTasks(filter: TaskFilter) {
   })
 }
 
+export function useTaskCount(filter: TaskFilter) {
+  const key = stableTaskFilterKey(filter)
+  return useQuery({
+    queryKey: queryKeys.taskCount(key),
+    queryFn: async () => unwrapIpc(await ipc.tasks.count(filter)),
+  })
+}
+
 export function useSubtasks(parentId: string, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.subtasks(parentId),
