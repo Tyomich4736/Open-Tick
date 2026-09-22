@@ -1,0 +1,46 @@
+appId: com.ticktickclone.app
+productName: TickTick Clone
+copyright: Copyright © 2026
+directories:
+  buildResources: resources
+  output: release
+files:
+  - out/**/*
+  - package.json
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron/*'
+  - '!docs/*'
+  - '!{.env,.env.*,.eslintrc.*,.prettierrc.*,eslint.config.*,electron.vite.config.*,tsconfig.*}'
+asarUnpack:
+  - '**/*.node'
+win:
+  icon: icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+mac:
+  icon: icon.png
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  category: public.app-category.productivity
+linux:
+  icon: icon.png
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  category: Utility
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

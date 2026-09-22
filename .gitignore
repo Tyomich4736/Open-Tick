@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+out/
+
+# Environment & secrets
+.env
+.env.local
+auth.enc
+
+# Local database
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Test
+coverage/
+test-results/
+playwright-report/
+
+# Electron
+*.asar

@@ -1,0 +1,82 @@
+{
+  "name": "ticktick-clone",
+  "version": "0.1.0",
+  "description": "Cross-platform TickTick clone — Electron + React, local-first with TickTick API sync",
+  "main": "./out/main/index.js",
+  "author": {
+    "name": "TickTick Clone Contributors",
+    "email": "example@ticktickclone.dev"
+  },
+  "homepage": "https://github.com/artyom/ticktick-clone",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:seed": "electron-vite dev -- --seed",
+    "build": "npm run typecheck && electron-vite build",
+    "preview": "electron-vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "node -e \"try{require('child_process').execSync('electron-rebuild -f -w better-sqlite3',{stdio:'inherit'})}catch(e){console.warn('electron-rebuild skipped:', e.message)}\"",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "package:win": "npm run build && electron-builder --win",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:linux": "npm run build && electron-builder --linux",
+    "package": "npm run build && electron-builder --win --mac --linux"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.80.7",
+    "@tanstack/react-virtual": "^3.14.10",
+    "@tiptap/extension-link": "^3.30.5",
+    "@tiptap/extension-placeholder": "^3.30.5",
+    "@tiptap/extension-task-item": "^3.30.5",
+    "@tiptap/extension-task-list": "^3.30.5",
+    "@tiptap/pm": "^3.30.5",
+    "@tiptap/react": "^3.30.5",
+    "@tiptap/starter-kit": "^3.30.5",
+    "better-sqlite3": "^11.10.0",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "dotenv": "^16.6.1",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
+    "tiptap-markdown": "^0.9.0",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "@tailwindcss/vite": "^4.1.8",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.5.2",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^3.1.0",
+    "eslint": "^9.28.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.2.0",
+    "prettier": "^3.5.3",
+    "prettier-plugin-tailwindcss": "^0.6.12",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.1",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  },
+  "allowScripts": {
+    "electron@35.7.5": true,
+    "better-sqlite3@11.10.0": true,
+    "esbuild@0.25.12": true
+  }
+}
