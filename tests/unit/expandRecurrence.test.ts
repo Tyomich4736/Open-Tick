@@ -48,6 +48,21 @@ describe('expandTasksForCalendarRange', () => {
     expect(out.every((t) => t.id === 't1')).toBe(true)
   })
 
+  it('expands weekly multi-day rules inside the week', () => {
+    const task = baseTask({
+      due_date: '2026-09-28T12:00:00.000Z', // Monday
+      recurrence_rule: {
+        ...defaultRecurrence('weekly'),
+        weekdays: [1, 3, 5], // Mon, Wed, Fri
+      },
+    })
+    const start = new Date('2026-09-28T00:00:00.000Z')
+    const end = new Date('2026-10-04T23:59:59.999Z')
+    const out = expandTasksForCalendarRange([task], start, end)
+    const days = out.map((t) => t.due_date!.slice(0, 10))
+    expect(days).toEqual(['2026-09-28', '2026-09-30', '2026-10-02'])
+  })
+
   it('respects after_count end of series', () => {
     const task = baseTask({
       recurrence_rule: {

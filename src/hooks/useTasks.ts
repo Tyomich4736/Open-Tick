@@ -15,6 +15,7 @@ export function stableTaskFilterKey(filter: TaskFilter): Record<string, unknown>
     parent_id: filter.parent_id === undefined ? '__omit__' : filter.parent_id,
     sort: filter.sort ?? 'order',
     include_completed: filter.include_completed ?? false,
+    include_recurring_series: filter.include_recurring_series ?? false,
     due_from: filter.due_from ?? null,
     due_to: filter.due_to ?? null,
   }

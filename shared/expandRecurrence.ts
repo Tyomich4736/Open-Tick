@@ -78,6 +78,22 @@ function expandSeries(
   let guard = 0
 
   while (guard++ < MAX_OCCURRENCES) {
+    const end = parseDate(due) ?? parseDate(start)
+
+    // Still before the visible window — advance without painting.
+    if (end && end < rangeStart) {
+      const next = nextOccurrenceDates(currentRule, {
+        due_date: due,
+        start_date: start,
+      })
+      if (!next) break
+      if (next.due_date === due && next.start_date === start) break
+      due = next.due_date
+      start = next.start_date
+      currentRule = next.rule
+      continue
+    }
+
     if (occurrenceOverlapsRange(start, due, rangeStart, rangeEnd)) {
       push(
         {
@@ -90,7 +106,6 @@ function expandSeries(
       )
     }
 
-    const end = parseDate(due) ?? parseDate(start)
     if (end && end > rangeEnd) break
 
     const next = nextOccurrenceDates(currentRule, {

@@ -37,4 +37,13 @@ describe('nextOccurrenceDates', () => {
     expect(result!.start_date).toBe(addDays(new Date(start), 1).toISOString())
     expect(result!.due_date).toBe(addDays(new Date(due), 1).toISOString())
   })
+
+  it('weekly with multiple weekdays advances to the next listed day', () => {
+    const monday = '2026-09-28T12:00:00.000Z'
+    const result = nextOccurrenceDates(
+      { ...defaultRecurrence('weekly'), weekdays: [1, 3, 5] },
+      { due_date: monday, start_date: null },
+    )
+    expect(result!.due_date).toBe('2026-09-30T12:00:00.000Z') // Wednesday
+  })
 })

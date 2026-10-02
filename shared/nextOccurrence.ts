@@ -17,14 +17,22 @@ function advanceByFrequency(date: Date, rule: RecurrenceRule): Date {
   }
 }
 
-function snapToWeekday(date: Date, weekdays: number[]): Date {
-  if (!weekdays.length) return date
-  let candidate = date
-  for (let i = 0; i < 7; i++) {
-    if (weekdays.includes(candidate.getDay())) return candidate
-    candidate = addDays(candidate, 1)
+/** Next weekly due: later weekday in the same week, else first weekday `interval` weeks ahead. */
+function advanceWeekly(date: Date, rule: RecurrenceRule): Date {
+  const interval = Math.max(1, rule.interval || 1)
+  const weekdays =
+    rule.weekdays && rule.weekdays.length > 0
+      ? [...rule.weekdays].sort((a, b) => a - b)
+      : [date.getDay()]
+  const day = date.getDay()
+
+  for (const wd of weekdays) {
+    if (wd > day) return addDays(date, wd - day)
   }
-  return date
+
+  const first = weekdays[0]
+  const daysIntoNextCycle = 7 - day + first + 7 * (interval - 1)
+  return addDays(date, daysIntoNextCycle)
 }
 
 /**
@@ -45,10 +53,9 @@ export function nextOccurrenceDates(
       ? (current.completed_at ?? current.due_date ?? new Date().toISOString())
       : (current.due_date ?? current.start_date ?? new Date().toISOString())
 
-  let nextDue = advanceByFrequency(parseISO(anchorIso), rule)
-  if (rule.frequency === 'weekly' && rule.weekdays && rule.weekdays.length > 0) {
-    nextDue = snapToWeekday(nextDue, rule.weekdays)
-  }
+  const anchor = parseISO(anchorIso)
+  const nextDue =
+    rule.frequency === 'weekly' ? advanceWeekly(anchor, rule) : advanceByFrequency(anchor, rule)
 
   if (rule.end.type === 'on_date' && isAfter(nextDue, parseISO(rule.end.date))) {
     return null
@@ -59,7 +66,10 @@ export function nextOccurrenceDates(
     const span = parseISO(current.due_date).getTime() - parseISO(current.start_date).getTime()
     nextStart = new Date(nextDue.getTime() - span).toISOString()
   } else if (current.start_date && !current.due_date) {
-    nextStart = advanceByFrequency(parseISO(current.start_date), rule).toISOString()
+    nextStart =
+      rule.frequency === 'weekly'
+        ? advanceWeekly(parseISO(current.start_date), rule).toISOString()
+        : advanceByFrequency(parseISO(current.start_date), rule).toISOString()
   }
 
   const due_date =
