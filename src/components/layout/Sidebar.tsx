@@ -1,4 +1,11 @@
-import { useMemo, useState, type ComponentType, type DragEvent, type MouseEvent } from 'react'
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type DragEvent,
+  type MouseEvent,
+} from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   AlertCircle,
@@ -109,9 +116,12 @@ function SidebarItem({
   depth = 0,
   collapsed,
   draggable,
+  dropHighlight,
   onDragStart,
   onDragOver,
+  onDragLeave,
   onDrop,
+  onDragEnd,
   onContextMenu,
 }: {
   to: string
@@ -122,9 +132,12 @@ function SidebarItem({
   depth?: number
   collapsed?: boolean
   draggable?: boolean
-  onDragStart?: () => void
+  dropHighlight?: boolean
+  onDragStart?: (e: DragEvent) => void
   onDragOver?: (e: DragEvent) => void
-  onDrop?: () => void
+  onDragLeave?: (e: DragEvent) => void
+  onDrop?: (e: DragEvent) => void
+  onDragEnd?: (e: DragEvent) => void
   onContextMenu?: (e: MouseEvent) => void
 }) {
   return (
@@ -134,16 +147,20 @@ function SidebarItem({
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
       onDrop={onDrop}
+      onDragEnd={onDragEnd}
       onContextMenu={onContextMenu}
       style={{ paddingLeft: collapsed ? undefined : `${12 + depth * 14}px` }}
       className={({ isActive }) =>
         [
           'flex items-center gap-2.5 rounded-lg py-2 text-sm transition-colors',
           collapsed ? 'justify-center px-2' : 'px-3',
-          isActive
-            ? 'bg-accent/10 font-medium text-accent'
-            : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/5',
+          dropHighlight
+            ? 'bg-accent/15 ring-1 ring-inset ring-accent/40'
+            : isActive
+              ? 'bg-accent/10 font-medium text-accent'
+              : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/5',
         ].join(' ')
       }
     >
@@ -183,13 +200,17 @@ export function Sidebar({
   const { data: tags = [] } = useTags()
   const { data: expandedMap = {} } = useFolderExpanded()
   const { setExpanded, reorderFolders } = useFolderMutations()
-  const { updateProject, reorderProjects } = useProjectMutations()
+  const { reorderProjects } = useProjectMutations()
   const { sections, toggleSection } = useSidebarSections()
   const userProjects = useNonInboxProjects(projects)
   const { data: todayCount = 0 } = useTaskCount({ smart_list: 'today', parent_id: null })
   const { data: overdueCount = 0 } = useTaskCount({ smart_list: 'overdue', parent_id: null })
   const location = useLocation()
+  const dragRef = useRef<DragPayload | null>(null)
   const [drag, setDrag] = useState<DragPayload | null>(null)
+  const [dropTarget, setDropTarget] = useState<
+    { kind: 'folder' | 'root' | 'project'; id: string } | null
+  >(null)
 
   const topLevelProjects = useMemo(
     () => userProjects.filter((p) => !p.folder_id).sort((a, b) => a.sort_order - b.sort_order),
@@ -236,49 +257,96 @@ export function Sidebar({
     setExpanded.mutate({ ...expandedMap, [folderId]: !isExpanded(folderId) })
   }
 
-  function onDropProjectOntoFolder(folderId: string | null) {
-    if (!drag || drag.kind !== 'project') return
-    updateProject.mutate({ id: drag.id, input: { folder_id: folderId } })
+  function clearDrag() {
+    dragRef.current = null
     setDrag(null)
+    setDropTarget(null)
+  }
+
+  function beginDrag(payload: DragPayload, e: DragEvent) {
+    dragRef.current = payload
+    setDrag(payload)
+    e.dataTransfer.setData('application/x-ticktick-drag', JSON.stringify(payload))
+    e.dataTransfer.setData('text/plain', payload.id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function readDrag(): DragPayload | null {
+    return dragRef.current ?? drag
+  }
+
+  function onDropProjectOntoFolder(folderId: string | null) {
+    const payload = readDrag()
+    if (!payload || payload.kind !== 'project') return
+    const project = userProjects.find((p) => p.id === payload.id)
+    if (!project) return
+    const alreadyThere =
+      folderId === null ? project.folder_id == null : project.folder_id === folderId
+    if (alreadyThere) {
+      clearDrag()
+      return
+    }
+    const siblings =
+      folderId === null ? topLevelProjects : (projectsByFolder.get(folderId) ?? [])
+    const ordered = siblings.map((p) => p.id).filter((id) => id !== payload.id)
+    ordered.push(payload.id)
+    reorderProjects.mutate({ orderedIds: ordered, folderId })
+    clearDrag()
   }
 
   function onDropReorderFolder(targetId: string) {
-    if (!drag || drag.kind !== 'folder' || drag.id === targetId) return
+    const payload = readDrag()
+    if (!payload || payload.kind !== 'folder' || payload.id === targetId) return
     const ids = folders.map((f) => f.id)
-    const from = ids.indexOf(drag.id)
+    const from = ids.indexOf(payload.id)
     const to = ids.indexOf(targetId)
     if (from < 0 || to < 0) return
     const next = [...ids]
     next.splice(from, 1)
-    next.splice(to, 0, drag.id)
+    next.splice(to, 0, payload.id)
     reorderFolders.mutate(next)
-    setDrag(null)
+    clearDrag()
   }
 
   function onDropReorderProject(target: Project, folderId: string | null) {
-    if (!drag || drag.kind !== 'project' || drag.id === target.id) return
+    const payload = readDrag()
+    if (!payload || payload.kind !== 'project' || payload.id === target.id) return
     const siblings =
       folderId === null
         ? topLevelProjects
         : (projectsByFolder.get(folderId) ?? [])
     const ids = siblings.map((p) => p.id)
-    const from = ids.indexOf(drag.id)
+    const from = ids.indexOf(payload.id)
     const to = ids.indexOf(target.id)
     if (from < 0 || to < 0) {
       const ordered = [...ids]
-      ordered.splice(to < 0 ? 0 : to, 0, drag.id)
+      ordered.splice(to < 0 ? 0 : to, 0, payload.id)
       reorderProjects.mutate({ orderedIds: ordered, folderId })
-      setDrag(null)
+      clearDrag()
       return
     }
     const next = [...ids]
     next.splice(from, 1)
-    next.splice(to, 0, drag.id)
+    next.splice(to, 0, payload.id)
     reorderProjects.mutate({ orderedIds: next, folderId })
-    setDrag(null)
+    clearDrag()
+  }
+
+  function allowProjectDrop(e: DragEvent) {
+    const payload = readDrag()
+    if (!payload || payload.kind !== 'project') return false
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    return true
   }
 
   function renderProject(project: Project, depth: number, folderId: string | null) {
+    const highlight =
+      dropTarget?.kind === 'project' &&
+      dropTarget.id === project.id &&
+      drag?.kind === 'project' &&
+      drag.id !== project.id
+
     return (
       <li key={project.id}>
         <SidebarItem
@@ -288,9 +356,24 @@ export function Sidebar({
           depth={depth}
           collapsed={collapsed}
           draggable={!collapsed}
-          onDragStart={() => setDrag({ kind: 'project', id: project.id })}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => onDropReorderProject(project, folderId)}
+          dropHighlight={Boolean(highlight)}
+          onDragStart={(e) => beginDrag({ kind: 'project', id: project.id }, e)}
+          onDragEnd={clearDrag}
+          onDragOver={(e) => {
+            if (!allowProjectDrop(e)) return
+            e.stopPropagation()
+            setDropTarget({ kind: 'project', id: project.id })
+          }}
+          onDragLeave={() => {
+            setDropTarget((current) =>
+              current?.kind === 'project' && current.id === project.id ? null : current,
+            )
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onDropReorderProject(project, folderId)
+          }}
           onContextMenu={(e) => {
             e.preventDefault()
             setContextMenu({ type: 'project', id: project.id, x: e.clientX, y: e.clientY })
@@ -303,25 +386,47 @@ export function Sidebar({
   function renderFolder(folder: ProjectFolder) {
     const expanded = isExpanded(folder.id)
     const children = projectsByFolder.get(folder.id) ?? []
+    const folderDropActive =
+      dropTarget?.kind === 'folder' &&
+      dropTarget.id === folder.id &&
+      drag?.kind === 'project'
 
     return (
       <li key={folder.id}>
         <div
           draggable
-          onDragStart={() => setDrag({ kind: 'folder', id: folder.id })}
+          onDragStart={(e) => beginDrag({ kind: 'folder', id: folder.id }, e)}
+          onDragEnd={clearDrag}
           onDragOver={(e) => {
+            const payload = readDrag()
+            if (!payload) return
             e.preventDefault()
+            e.stopPropagation()
+            e.dataTransfer.dropEffect = 'move'
+            if (payload.kind === 'project') {
+              setDropTarget({ kind: 'folder', id: folder.id })
+            }
+          }}
+          onDragLeave={() => {
+            setDropTarget((current) =>
+              current?.kind === 'folder' && current.id === folder.id ? null : current,
+            )
           }}
           onDrop={(e) => {
             e.preventDefault()
-            if (drag?.kind === 'folder') onDropReorderFolder(folder.id)
+            e.stopPropagation()
+            const payload = readDrag()
+            if (payload?.kind === 'folder') onDropReorderFolder(folder.id)
             else onDropProjectOntoFolder(folder.id)
           }}
           onContextMenu={(e) => {
             e.preventDefault()
             setContextMenu({ type: 'folder', id: folder.id, x: e.clientX, y: e.clientY })
           }}
-          className="group relative flex items-center gap-1 rounded-lg px-1 py-0.5 hover:bg-black/5 dark:hover:bg-white/5"
+          className={[
+            'group relative flex items-center gap-1 rounded-lg px-1 py-0.5 hover:bg-black/5 dark:hover:bg-white/5',
+            folderDropActive ? 'bg-accent/15 ring-1 ring-inset ring-accent/40' : '',
+          ].join(' ')}
         >
           <button
             type="button"
@@ -348,10 +453,18 @@ export function Sidebar({
         </div>
         <Collapse open={expanded}>
           <ul
-            className="space-y-0.5"
-            onDragOver={(e) => e.preventDefault()}
+            className={[
+              'min-h-2 space-y-0.5 rounded-lg',
+              folderDropActive ? 'bg-accent/5' : '',
+            ].join(' ')}
+            onDragOver={(e) => {
+              if (!allowProjectDrop(e)) return
+              e.stopPropagation()
+              setDropTarget({ kind: 'folder', id: folder.id })
+            }}
             onDrop={(e) => {
               e.preventDefault()
+              e.stopPropagation()
               onDropProjectOntoFolder(folder.id)
             }}
           >
@@ -425,11 +538,24 @@ export function Sidebar({
               />
               <Collapse open={sections.projects}>
                 <ul
-                  className="space-y-0.5"
-                  onDragOver={(e) => e.preventDefault()}
+                  className={[
+                    'min-h-2 space-y-0.5 rounded-lg',
+                    dropTarget?.kind === 'root' && drag?.kind === 'project'
+                      ? 'bg-accent/5 ring-1 ring-inset ring-accent/30'
+                      : '',
+                  ].join(' ')}
+                  onDragOver={(e) => {
+                    if (!allowProjectDrop(e)) return
+                    setDropTarget({ kind: 'root', id: 'root' })
+                  }}
+                  onDragLeave={(e) => {
+                    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+                    setDropTarget((current) => (current?.kind === 'root' ? null : current))
+                  }}
                   onDrop={(e) => {
                     e.preventDefault()
-                    if (drag?.kind === 'project') onDropProjectOntoFolder(null)
+                    e.stopPropagation()
+                    if (readDrag()?.kind === 'project') onDropProjectOntoFolder(null)
                   }}
                 >
                   {folders.map((folder) => renderFolder(folder))}
