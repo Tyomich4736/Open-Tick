@@ -63,7 +63,7 @@ Implement `AppShell` with placeholder sidebar routes — no data yet.
 
 ### 1.1 Database singleton
 
-- `electron/main/db/connection.ts` — open DB at `userData/ticktick.db`
+- `electron/main/db/connection.ts` — open DB at `userData/opentick.db`
 - Run migrations on app ready **before** creating window
 
 ### 1.2 Migration 001

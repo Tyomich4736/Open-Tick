@@ -266,7 +266,7 @@ export function Sidebar({
   function beginDrag(payload: DragPayload, e: DragEvent) {
     dragRef.current = payload
     setDrag(payload)
-    e.dataTransfer.setData('application/x-ticktick-drag', JSON.stringify(payload))
+    e.dataTransfer.setData('application/x-opentick-drag', JSON.stringify(payload))
     e.dataTransfer.setData('text/plain', payload.id)
     e.dataTransfer.effectAllowed = 'move'
   }
@@ -485,7 +485,7 @@ export function Sidebar({
       >
         {!collapsed && (
           <div className="min-w-0 px-1">
-            <h1 className="truncate text-base font-semibold text-text-primary">TickTick Clone</h1>
+            <h1 className="truncate text-base font-semibold text-text-primary">Open Tick</h1>
             <p className="mt-0.5 truncate text-xs text-text-muted">Local-first task manager</p>
           </div>
         )}

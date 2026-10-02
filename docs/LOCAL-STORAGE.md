@@ -8,15 +8,15 @@ SQLite database managed exclusively in the **Electron main process** via `better
 
 | Platform | Path |
 |----------|------|
-| Windows | `%APPDATA%\TickTick Clone\ticktick.db` |
-| macOS | `~/Library/Application Support/TickTick Clone/ticktick.db` |
-| Linux (future) | `~/.config/TickTick Clone/ticktick.db` |
+| Windows | `%APPDATA%\Open Tick\opentick.db` |
+| macOS | `~/Library/Application Support/Open Tick/opentick.db` |
+| Linux | `~/.config/Open Tick/opentick.db` |
 
 Additional files in same directory:
 
 | File | Purpose |
 |------|---------|
-| `ticktick.db-wal` | WAL journal (SQLite) |
+| `opentick.db-wal` | WAL journal (SQLite) |
 | `auth.enc` | Encrypted OAuth tokens (if safeStorage unavailable) |
 | `logs/main.log` | electron-log output |
 | `backups/` | Manual/auto DB backups |
@@ -259,7 +259,7 @@ Never store tokens in SQLite (avoid accidental backup export exposure) or render
 **Manual backup** (Phase 12):
 
 1. Pause sync worker
-2. `VACUUM INTO 'backups/ticktick-YYYYMMDD.db'`
+2. `VACUUM INTO 'backups/opentick-YYYYMMDD.db'`
 3. Resume sync
 
 **Restore:** replace db file while app stopped; run migrations on next start.

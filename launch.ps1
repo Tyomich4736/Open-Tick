@@ -1,4 +1,4 @@
-# Launch TickTick Clone (Electron + Vite dev)
+# Launch Open Tick (Electron + Vite dev)
 # Usage:
 #   .\launch.ps1
 #   .\launch.ps1 -Seed
@@ -44,5 +44,5 @@ if (-not (Test-Path '.\node_modules')) {
 }
 
 $scriptName = if ($Seed) { 'dev:seed' } else { 'dev' }
-Write-Host "Starting TickTick Clone (npm run $scriptName)..." -ForegroundColor Green
+Write-Host "Starting Open Tick (npm run $scriptName)..." -ForegroundColor Green
 npm run $scriptName

@@ -61,7 +61,7 @@ export function createMainWindow(): BrowserWindow {
     // when DB/native init or load stalled.
     show: true,
     autoHideMenuBar: true,
-    title: 'TickTick Clone',
+    title: 'Open Tick',
     icon: appIconPath(),
     webPreferences: {
       preload: preloadScriptPath(),

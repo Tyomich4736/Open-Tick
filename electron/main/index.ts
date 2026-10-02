@@ -15,8 +15,8 @@ import { applyDesktopSettings, isMinimizeToTrayEnabled } from './desktop/desktop
 import { startReminderScheduler, stopReminderScheduler } from './notifications/reminderScheduler'
 
 /** Must match electron-builder `appId` so Windows toasts show the real app name. */
-const APP_ID = 'com.ticktickclone.app'
-const APP_DISPLAY_NAME = 'TickTick Clone'
+const APP_ID = 'com.opentick.app'
+const APP_DISPLAY_NAME = 'Open Tick'
 
 app.setName(APP_DISPLAY_NAME)
 if (process.platform === 'win32') {
@@ -59,7 +59,7 @@ async function startApp(): Promise<void> {
   } catch (err) {
     logStartup('Fatal during database / IPC init', err)
     dialog.showErrorBox(
-      'TickTick Clone failed to start',
+      'Open Tick failed to start',
       `Could not open the local database.\n\n${
         err instanceof Error ? err.message : String(err)
       }\n\nIf you built this app on Linux for Windows, rebuild on a Windows machine or ensure the win32 better-sqlite3 prebuild is packaged.\n\nDetails: ${join(
@@ -86,7 +86,7 @@ async function startApp(): Promise<void> {
   } catch (err) {
     logStartup('Fatal while creating window', err)
     dialog.showErrorBox(
-      'TickTick Clone failed to open a window',
+      'Open Tick failed to open a window',
       err instanceof Error ? err.message : String(err),
     )
     app.quit()

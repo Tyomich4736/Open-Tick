@@ -1,5 +1,5 @@
-appId: com.ticktickclone.app
-productName: TickTick Clone
+appId: com.opentick.app
+productName: Open Tick
 copyright: Copyright © 2026
 directories:
   buildResources: resources

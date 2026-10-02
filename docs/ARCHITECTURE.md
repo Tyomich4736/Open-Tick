@@ -58,7 +58,7 @@
 ## Proposed folder structure
 
 ```
-ticktick-clone/
+open-tick/
 ├── electron/
 │   ├── main/
 │   │   ├── index.ts              # App entry, window lifecycle
@@ -172,13 +172,13 @@ See [SYNC-STRATEGY.md](./SYNC-STRATEGY.md) for details.
 
 ### Windows
 
-- DB path: `%APPDATA%/<app-name>/ticktick.db`
+- DB path: `%APPDATA%/<app-name>/opentick.db`
 - Tray icon required for background notifications
 - NSIS installer via electron-builder
 
 ### macOS
 
-- DB path: `~/Library/Application Support/<app-name>/ticktick.db`
+- DB path: `~/Library/Application Support/<app-name>/opentick.db`
 - App menu + `Cmd+,` for settings
 - DMG + notarization for distribution outside dev
 

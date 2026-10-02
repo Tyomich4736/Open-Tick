@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch TickTick Clone (dev server with hot reload by default)
+# Launch Open Tick (dev server with hot reload by default)
 # Usage:
 #   ./launch.sh
 #   ./launch.sh --seed
@@ -10,7 +10,7 @@ set -e
 cd "$(dirname "$0")"
 
 if [[ "$1" == "--appimage" || "$1" == "--packaged" ]]; then
-  APPIMAGE=$(find release -maxdepth 1 -name 'TickTick Clone-*-linux-*.AppImage' | head -n1)
+  APPIMAGE=$(find release -maxdepth 1 -name 'Open Tick-*-linux-*.AppImage' | head -n1)
   if [[ -n "$APPIMAGE" ]]; then
     echo "Launching packaged AppImage: $APPIMAGE"
     chmod +x "$APPIMAGE"

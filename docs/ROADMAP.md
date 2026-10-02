@@ -1,6 +1,6 @@
 # Development Roadmap
 
-This roadmap breaks the TickTick clone into **16 phases** across two tracks:
+This roadmap breaks Open Tick into **16 phases** across two tracks:
 
 1. **Phases 0–12 — Offline-first** — full local app, usable without network
 2. **Phases 13–16 — TickTick sync** — pull first, then push, then incremental/conflicts
@@ -946,7 +946,7 @@ These TickTick features will **not** be implemented in this project:
 
 ```mermaid
 gantt
-    title TickTick Clone Roadmap
+    title Open Tick Roadmap
     dateFormat  YYYY-MM-DD
     section Foundation
     Phase 0 Bootstrap           :p0, 2026-09-01, 7d

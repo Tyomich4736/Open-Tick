@@ -88,7 +88,7 @@ export function DesktopSettings() {
         />
         <ToggleRow
           label="Start with system"
-          description="Launch TickTick Clone when you sign in to your computer"
+          description="Launch Open Tick when you sign in to your computer"
           checked={settings.autoStart}
           onChange={(v) => void update('autoStart', v)}
         />

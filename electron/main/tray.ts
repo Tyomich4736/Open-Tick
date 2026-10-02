@@ -21,7 +21,7 @@ export function createAppTray(): Tray {
   tray = new Tray(
     icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 16, height: 16 }),
   )
-  tray.setToolTip('TickTick Clone')
+  tray.setToolTip('Open Tick')
 
   const rebuildMenu = () => {
     const win = getMainWindowRef()

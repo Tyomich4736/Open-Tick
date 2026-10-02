@@ -1,4 +1,4 @@
-# TickTick Clone (Desktop)
+# Open Tick (Desktop)
 
 A cross-platform desktop task manager for **Windows**, **macOS**, and **Linux**, built with **Electron + React**. The app integrates with the [TickTick Open API](https://developer.ticktick.com/) while keeping a **local-first** copy of tasks, projects, and sync metadata on disk.
 

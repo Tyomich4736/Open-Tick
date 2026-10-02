@@ -11,7 +11,7 @@ export async function handleBackupExport(
     const win = BrowserWindow.fromWebContents(event.sender)
     const options: Electron.SaveDialogOptions = {
       title: 'Export database backup',
-      defaultPath: `ticktick-backup-${new Date().toISOString().slice(0, 10)}.db`,
+      defaultPath: `opentick-backup-${new Date().toISOString().slice(0, 10)}.db`,
       filters: [{ name: 'SQLite database', extensions: ['db'] }],
     }
     const result = win

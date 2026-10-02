@@ -1,14 +1,14 @@
 {
-  "name": "ticktick-clone",
-  "productName": "TickTick Clone",
+  "name": "open-tick",
+  "productName": "Open Tick",
   "version": "0.1.0",
-  "description": "Cross-platform TickTick clone — Electron + React, local-first with TickTick API sync",
+  "description": "Open Tick — cross-platform local-first task manager with TickTick API sync",
   "main": "./out/main/index.js",
   "author": {
-    "name": "TickTick Clone Contributors",
-    "email": "example@ticktickclone.dev"
+    "name": "Open Tick Contributors",
+    "email": "example@opentick.dev"
   },
-  "homepage": "https://github.com/artyom/ticktick-clone",
+  "homepage": "https://github.com/artyom/open-tick",
   "license": "MIT",
   "engines": {
     "node": ">=20"

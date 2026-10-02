@@ -1,6 +1,6 @@
 # Development Guide
 
-Setup, scripts, testing, and packaging for the Electron + React TickTick clone.
+Setup, scripts, testing, and packaging for the Electron + React Open Tick app.
 
 ---
 
@@ -87,7 +87,7 @@ Conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `test:`
 ## Running on Windows
 
 ```powershell
-cd "D:\Projects\Pet projects\TickTick clone"
+cd /path/to/open-tick
 npm run dev
 ```
 
@@ -179,8 +179,8 @@ test('creates task offline', async ({ electronApp }) => {
 `electron-builder.yml` sketch:
 
 ```yaml
-appId: com.ticktickclone.app
-productName: TickTick Clone
+appId: com.opentick.app
+productName: Open Tick
 directories:
   output: release
 files:
