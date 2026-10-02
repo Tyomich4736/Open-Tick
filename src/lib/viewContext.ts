@@ -24,7 +24,7 @@ export function viewFromPath(pathname: string, projectName?: string): ViewType |
       kind: 'smart',
       smart_list: 'today',
       title: 'Today',
-      description: 'Tasks due today',
+      description: 'Due today and overdue',
     },
     tomorrow: {
       kind: 'smart',

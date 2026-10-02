@@ -85,6 +85,11 @@ export function formatDueRange(
       return `${formatDayPart(startDate)} – ${formatDayPart(endDate)}`
     }
 
+    // Overdue duration: list chip shows start day + start time (not the full range).
+    if (isOverdue(input.due_date, false)) {
+      return `${formatDayPart(startDate)}, ${format(startDate, tp)}`
+    }
+
     if (sameDay) {
       return `${format(startDate, tp)}–${format(endDate, tp)}`
     }

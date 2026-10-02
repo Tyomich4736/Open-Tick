@@ -84,7 +84,7 @@ Folders (TickTick project groups) are expected to sync on **both** tiers. If a f
 
 | ID | Profile | Steps | Expected |
 |----|---------|-------|----------|
-| S-01 | Local | Check the smart lists in order. | Inbox, Today, Tomorrow, Next 7 Days, Overdue, Completed. Today shows a count badge of pending tasks due today. |
+| S-01 | Local | Check the smart lists in order. | Inbox, Today, Tomorrow, Next 7 Days, Overdue, Completed. Today’s badge counts pending tasks due today plus overdue. |
 | S-02 | Local | Create a list from the sidebar (**+** / new project). Name it `QA-List`. | The list appears under projects, opens, and survives restart. |
 | S-03 | Local | Right-click the list → Rename. Change the name. | The new name shows in the sidebar and in the list header. |
 | S-04 | Local | Right-click the list → Delete list. Confirm. | The list and its tasks disappear. Cancel leaves them in place. |
@@ -154,7 +154,7 @@ Folders (TickTick project groups) are expected to sync on **both** tiers. If a f
 | R-13 | Local | Set a custom interval (every 2 days) and an end: Never, On date, After N times. | Each end condition is stored and shown. |
 | R-14 | Local | Complete a daily repeating task. | The completed occurrence moves to Completed. A next pending occurrence appears with the following due date. |
 | R-15 | Local | On a repeating task, choose **This occurrence only** and change the title. Then change the series with **This and all future**. | The single occurrence keeps its own title. The series edit does not rewrite that exception. |
-| R-16 | Local | Put an overdue dated task in the past. Open Overdue and Today. | Overdue lists it. Today does not, unless a duration span still overlaps today. The due chip uses overdue styling. |
+| R-16 | Local | Put an overdue dated task in the past. Open Overdue and Today. | Both lists show it. The due chip uses overdue styling. Tomorrow does not list it. |
 
 ---
 
@@ -201,6 +201,7 @@ These views are local. A free TickTick account is not required, and TickTick Pre
 | C-07 | Local | On Week or Day, drag a time range on the grid. | A new task is created with that start and end, and the panel focuses the title. |
 | C-08 | Local | Click a day in Month. | The view moves to that day (or shows that day’s agenda). |
 | C-09 | Local | Turn **Show all iterations** on. Look at a daily task across the visible range. Turn it off. | On: future cycles appear in the visible range. Off: only the current occurrence is shown. |
+| C-09b | Local | Turn **Show completed tasks** on. Complete a dated task. Look at calendar. Turn the setting off. | On: the completed task stays visible with a struck-through title. Off: it disappears from the calendar. |
 | C-10 | Local | Change a task’s date in the list, then look at the calendar without restarting. | The calendar matches the list. Both read the local database. |
 
 ---

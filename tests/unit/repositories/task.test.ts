@@ -74,15 +74,19 @@ describe('TaskRepository', () => {
     expect(listed?.tags.sort()).toEqual(['home', 'urgent'])
   })
 
-  it('filters today tasks by due date', () => {
+  it('filters today tasks by due date and includes overdue', () => {
     const inbox = repos.projects.ensureInbox()
     const today = formatISO(new Date())
+    const yesterday = formatISO(new Date(Date.now() - 24 * 60 * 60 * 1000))
+    const tomorrow = formatISO(new Date(Date.now() + 24 * 60 * 60 * 1000))
 
     repos.tasks.create({ title: 'Due today', project_id: inbox.id, due_date: today })
+    repos.tasks.create({ title: 'Late', project_id: inbox.id, due_date: yesterday })
     repos.tasks.create({ title: 'No due', project_id: inbox.id })
+    repos.tasks.create({ title: 'Soon', project_id: inbox.id, due_date: tomorrow })
 
-    const todayTasks = repos.tasks.list({ smart_list: 'today' })
-    expect(todayTasks.map((t) => t.title)).toEqual(['Due today'])
+    const todayTasks = repos.tasks.list({ smart_list: 'today', sort: 'due_date' })
+    expect(todayTasks.map((t) => t.title)).toEqual(['Late', 'Due today'])
   })
 
   it('filters overdue tasks', () => {

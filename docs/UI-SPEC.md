@@ -52,7 +52,7 @@ Priority accents: none = no bar, low `#4772FA`, medium `#FFAF38`, high `#FE7777`
 
 ## Sidebar
 
-Smart lists in order: Inbox, Today (count badge), Tomorrow, Next 7 Days, Overdue, Completed.
+Smart lists in order: Inbox, Today (due today + overdue; count badge), Tomorrow, Next 7 Days, Overdue, Completed.
 
 Projects sorted by `sort_order`, then name, nested under folders. Row: color dot, name, pending count, `⋮` on hover. Footer: new project / folder. Sync chip in the footer opens the Integration panel.
 
@@ -162,7 +162,7 @@ Footer dot: green idle, orange pending push, blue while syncing, red on error, g
 
 - **Account** — credentials, Connect / Disconnect, link to Integration
 - **General** — timezone, time format, density
-- **Calendar** — week start, visible hours, show all recurrence iterations
+- **Calendar** — week start, visible hours, show all recurrence iterations, show completed tasks
 - **Appearance** — font, light/dark/system, presets / image palette / custom colors, reset
 - **Notifications** — enable, lead time
 - **Desktop** — tray, auto-start, shortcuts, sticky pin default, backup export/restore

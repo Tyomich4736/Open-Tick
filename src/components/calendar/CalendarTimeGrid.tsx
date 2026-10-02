@@ -161,7 +161,12 @@ export function CalendarTimeGrid({
                       openTaskPopup(task.id)
                     }}
                     onContextMenu={(e) => openTaskContextMenu(e, task.id)}
-                    className="truncate rounded px-1 py-0.5 text-left text-[10px] text-text-primary"
+                    className={[
+                      'truncate rounded px-1 py-0.5 text-left text-[10px]',
+                      task.status === 'completed'
+                        ? 'text-text-muted line-through opacity-70'
+                        : 'text-text-primary',
+                    ].join(' ')}
                     style={calendarTaskChromeStyle(task, { washAlpha: '33' })}
                   >
                     {task.title || 'Untitled'}
@@ -266,8 +271,11 @@ export function CalendarTimeGrid({
                   onContextMenu={(e) => openTaskContextMenu(e, item.task.id)}
                   onMouseDown={(e) => e.stopPropagation()}
                   className={[
-                    'absolute z-10 flex overflow-hidden rounded text-left text-[10px] leading-tight text-text-primary shadow-sm',
+                    'absolute z-10 flex overflow-hidden rounded text-left text-[10px] leading-tight shadow-sm',
                     short ? 'items-center px-1' : 'items-start px-1 py-0.5',
+                    item.task.status === 'completed'
+                      ? 'text-text-muted opacity-70'
+                      : 'text-text-primary',
                   ].join(' ')}
                   style={{
                     top,
@@ -279,7 +287,10 @@ export function CalendarTimeGrid({
                   title={item.task.title}
                 >
                   <span
-                    className="min-h-0 w-full overflow-hidden font-medium break-words"
+                    className={[
+                      'min-h-0 w-full overflow-hidden font-medium break-words',
+                      item.task.status === 'completed' ? 'line-through' : '',
+                    ].join(' ')}
                     style={{
                       display: '-webkit-box',
                       WebkitBoxOrient: 'vertical',

@@ -952,12 +952,18 @@ export class TaskRepository {
           }
           break
         case 'today':
-          // Duration overlap: start ≤ end-of-today AND due ≥ start-of-today
+          // Overlaps today, or already overdue (past due before today).
           // Bounds are UTC Z so they compare safely with stored due_date ISO strings.
           clauses.push('t.due_date IS NOT NULL')
-          clauses.push('COALESCE(t.start_date, t.due_date) <= ?')
-          clauses.push('t.due_date >= ?')
-          params.push(instantToFilterIso(todayEnd), instantToFilterIso(todayStart))
+          clauses.push(`(
+            (COALESCE(t.start_date, t.due_date) <= ? AND t.due_date >= ?)
+            OR t.due_date < ?
+          )`)
+          params.push(
+            instantToFilterIso(todayEnd),
+            instantToFilterIso(todayStart),
+            instantToFilterIso(todayStart),
+          )
           if (filter.include_completed !== true) {
             clauses.push("t.status = 'pending'")
           }

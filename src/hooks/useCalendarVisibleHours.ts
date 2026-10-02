@@ -27,6 +27,7 @@ function notify(next: CalendarVisibleHours) {
 }
 
 function clampHour(value: unknown, min: number, max: number, fallback: number): number {
+  if (value === null || value === undefined || value === '') return fallback
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) return fallback
   return Math.min(max, Math.max(min, Math.round(n)))
@@ -46,12 +47,15 @@ async function ensureLoaded(): Promise<void> {
     ipc.settings.get<unknown>(CALENDAR_DAY_START_HOUR_KEY),
     ipc.settings.get<unknown>(CALENDAR_DAY_END_HOUR_KEY),
   ])
-  const startHour = startRes.ok
-    ? clampHour(startRes.data, 0, 23, DEFAULT_DAY_START_HOUR)
-    : DEFAULT_DAY_START_HOUR
-  const endHour = endRes.ok
-    ? clampHour(endRes.data, 1, 24, DEFAULT_DAY_END_HOUR)
-    : DEFAULT_DAY_END_HOUR
+  // Missing keys come back as ok + null — treat as unset, not hour 0.
+  const startHour =
+    startRes.ok && startRes.data != null
+      ? clampHour(startRes.data, 0, 23, DEFAULT_DAY_START_HOUR)
+      : DEFAULT_DAY_START_HOUR
+  const endHour =
+    endRes.ok && endRes.data != null
+      ? clampHour(endRes.data, 1, 24, DEFAULT_DAY_END_HOUR)
+      : DEFAULT_DAY_END_HOUR
   notify(normalize(startHour, endHour))
 }
 

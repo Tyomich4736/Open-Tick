@@ -63,7 +63,14 @@ export function CalendarAgenda({ cursor, tasks, days = 30 }: CalendarAgendaProps
                           className="size-2 shrink-0 rounded-full"
                           style={calendarTaskDotStyle(task)}
                         />
-                        <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                        <span
+                          className={[
+                            'min-w-0 flex-1 truncate text-sm',
+                            task.status === 'completed'
+                              ? 'text-text-muted line-through'
+                              : 'text-text-primary',
+                          ].join(' ')}
+                        >
                           {task.title || 'Untitled'}
                         </span>
                         {label && (

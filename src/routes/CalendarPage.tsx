@@ -23,6 +23,7 @@ import { useProjects } from '@/hooks/useProjects'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
 import { useWeekStartsOn } from '@/hooks/useWeekStartsOn'
 import { useCalendarShowAllRecurrence } from '@/hooks/useCalendarShowAllRecurrence'
+import { useCalendarShowCompleted } from '@/hooks/useCalendarShowCompleted'
 import {
   agendaRange,
   dayRange,
@@ -58,6 +59,7 @@ export function CalendarPage() {
   const requestFocusTitle = useCalendarStore((s) => s.requestFocusTitle)
   const { weekStartsOn } = useWeekStartsOn()
   const { showAllRecurrence } = useCalendarShowAllRecurrence()
+  const { showCompleted } = useCalendarShowCompleted()
   const { data: projects } = useProjects()
   const inbox = useInboxProject(projects)
   const { createTask } = useTaskMutations()
@@ -88,7 +90,7 @@ export function CalendarPage() {
   const { data: rawTasks = [], isLoading } = useTasks({
     due_from: filterRange.due_from,
     due_to: filterRange.due_to,
-    include_completed: false,
+    include_completed: showCompleted,
     parent_id: null,
     sort: 'due_date',
     include_recurring_series: showAllRecurrence,

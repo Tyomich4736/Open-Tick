@@ -265,13 +265,34 @@ export function TaskDetailPanel({
           <div className="p-4 text-sm text-text-muted">Loading…</div>
         ) : (
           <div className="space-y-5 p-5">
-            <input
-              ref={titleInputRef}
-              value={draft.title}
-              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-              placeholder="Task title"
-              className="w-full bg-transparent text-lg font-medium text-text-primary outline-none placeholder:text-text-muted"
-            />
+            <div className="flex items-start gap-3">
+              {variant === 'modal' && (
+                <input
+                  type="checkbox"
+                  checked={draft.status === 'completed'}
+                  onChange={() =>
+                    toggleComplete.mutate({
+                      id: draft.id,
+                      completed: draft.status === 'completed',
+                    })
+                  }
+                  aria-label={`Mark complete: ${draft.title || 'task'}`}
+                  className="task-checkbox mt-1.5 size-5 shrink-0 cursor-pointer transition-transform duration-150 checked:scale-110"
+                />
+              )}
+              <input
+                ref={titleInputRef}
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                placeholder="Task title"
+                className={[
+                  'min-w-0 flex-1 bg-transparent text-lg font-medium outline-none placeholder:text-text-muted',
+                  draft.status === 'completed'
+                    ? 'text-text-muted line-through'
+                    : 'text-text-primary',
+                ].join(' ')}
+              />
+            </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <DateTimeReminderField

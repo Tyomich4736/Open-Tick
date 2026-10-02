@@ -252,6 +252,7 @@ interface Setting {
 | `calendar_day_start_hour` | number `0–23` | `0` |
 | `calendar_day_end_hour` | number `1–24` | `24` |
 | `calendar_show_all_recurrence` | boolean | `false` — when true, calendar expands future repeat cycles |
+| `calendar_show_completed` | boolean | `false` — when true, completed tasks appear on the calendar (struck-through) |
 | `notifications_enabled` | boolean | `true` |
 | `notification_lead_minutes` | number | `15` |
 | `sync_interval_minutes` | number | `3` |
@@ -346,7 +347,7 @@ interface TaskListItem {
 | View | Query rule |
 |------|------------|
 | Inbox | `project.is_inbox = true` AND `status = pending` |
-| Today | `status = pending` AND overlaps today (see below) |
+| Today | `status = pending` AND (overlaps today OR overdue) |
 | Tomorrow | overlaps tomorrow |
 | Next 7 days | overlaps next 7 days |
 | Overdue | `due_date < start_of_today` AND pending (point tasks); duration tasks where entire range ended before today |
