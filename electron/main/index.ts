@@ -14,6 +14,15 @@ import { createAppTray } from './tray'
 import { applyDesktopSettings, isMinimizeToTrayEnabled } from './desktop/desktopSettings'
 import { startReminderScheduler, stopReminderScheduler } from './notifications/reminderScheduler'
 
+/** Must match electron-builder `appId` so Windows toasts show the real app name. */
+const APP_ID = 'com.ticktickclone.app'
+const APP_DISPLAY_NAME = 'TickTick Clone'
+
+app.setName(APP_DISPLAY_NAME)
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_ID)
+}
+
 // Single instance — prevent silent multi-process launches with no focused window.
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {

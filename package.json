@@ -1,5 +1,6 @@
 {
   "name": "ticktick-clone",
+  "productName": "TickTick Clone",
   "version": "0.1.0",
   "description": "Cross-platform TickTick clone — Electron + React, local-first with TickTick API sync",
   "main": "./out/main/index.js",
