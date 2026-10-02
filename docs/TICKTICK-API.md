@@ -1,8 +1,6 @@
-# TickTick Open API Integration
+# TickTick Open API
 
-Official documentation: [developer.ticktick.com](https://developer.ticktick.com/)
-
-This document covers authentication, endpoints, DTO mapping, and implementation notes for the desktop app.
+Official docs: [developer.ticktick.com](https://developer.ticktick.com/). What’s below is what we actually rely on in Open Tick — including quirks the portal glosses over.
 
 ---
 
@@ -15,17 +13,17 @@ This document covers authentication, endpoints, DTO mapping, and implementation 
 
 OAuth authorization host: `https://ticktick.com` (or Dida365 equivalent).
 
-> **Note:** Some community tools report mixed base URLs for certain endpoints (`task/move`, `task/completed`, `task/filter`). Implement v1 with `api.ticktick.com` and add a settings override if needed.
+Community tools sometimes use different hosts for `task/move`, `task/completed`, `task/filter`. We stick to `api.ticktick.com` and keep a settings override if needed.
 
 ---
 
-## Authentication
+## Auth
 
-### Option A — OAuth 2.0 (recommended for desktop app)
+### OAuth 2.0 (normal path)
 
-1. Register application at [Manage Apps](https://developer.ticktick.com/) → obtain `client_id` and `client_secret`.
-2. Set redirect URI to loopback, e.g. `http://127.0.0.1:18463/callback`.
-3. Request scopes: `tasks:read tasks:write` (confirm exact scope strings in portal during implementation).
+1. Register at [Manage Apps](https://developer.ticktick.com/) → `client_id` / `client_secret`.
+2. Redirect URI: `http://127.0.0.1:18463/callback` (must match exactly).
+3. Scopes: `tasks:read tasks:write` (double-check the portal if auth fails).
 
 **Authorization URL**
 
@@ -68,16 +66,16 @@ grant_type=refresh_token
 &client_secret={CLIENT_SECRET}
 ```
 
-Implement `TickTickClient.ensureValidToken()` called before each API batch.
+Call `ensureValidToken()` before a batch of requests.
 
-### Option B — Personal access token (dev only)
+### Personal access token (dev shortcut)
 
-Some accounts expose a `tp_*` token usable directly as Bearer token without OAuth. Useful for development; **do not** ship this as the primary UX for end users.
+Some accounts hand out a `tp_*` Bearer token without OAuth. Fine for local hacking; don’t make it the main product path.
 
-Limitations observed in the wild:
+Caveats we’ve hit:
 
-- May not work with `GET /user/profile` (404)
-- Always use project-scoped task endpoints
+- `GET /user/profile` may 404
+- Stick to project-scoped task endpoints
 
 ---
 
@@ -152,7 +150,7 @@ Assign a project to a folder by setting `groupId` on create/update (`POST /proje
 | `POST` | `/project/{projectId}/task/{taskId}/complete` | Complete task |
 | `DELETE` | `/project/{projectId}/task/{taskId}` | Delete task |
 
-### Extended endpoints (Phase 14+ / optional)
+### Extra endpoints (push / later)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -161,15 +159,13 @@ Assign a project to a folder by setting `groupId` on create/update (`POST /proje
 | `POST` | `/task/filter` | Filter tasks server-side |
 | `GET/POST/DELETE` | `/project/{projectId}/task/{taskId}/comment` | Comments |
 
-Column create/update/delete endpoints (if exposed by TickTick) are deferred for push sync. Column APIs are not mapped locally yet.
-
-Defer habits, focus, and countdown until after MVP.
+We don’t map columns, habits, focus, or countdowns.
 
 ---
 
-## API data types
+## Remote shapes
 
-### Task (remote)
+### Task
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -187,7 +183,7 @@ Defer habits, focus, and countdown until after MVP.
 | `status` | number | `0` pending, `2` completed |
 | `kind` | string | Default `TEXT` |
 
-### Project (remote)
+### Project
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -200,12 +196,9 @@ Defer habits, focus, and countdown until after MVP.
 
 ---
 
-## Inbox special case
+## Inbox
 
-- Inbox project ID is **per-user**, format like `inbox{userId}` — **not** returned by `GET /project`.
-- Discover from any inbox task's `projectId`, or from `GET /project/inbox/data` response context.
-- Store discovered inbox id in local `settings` table after first successful sync.
-- Empty inbox: cannot discover id until first task exists — handle gracefully in UI.
+Inbox’s project id looks like `inbox{userId}` and does **not** show up in `GET /project`. Grab it from an inbox task’s `projectId` or from `/project/inbox/data`, then stash it locally. Empty brand-new inbox: you may not know the id until the first task exists — don’t crash on that.
 
 ---
 
@@ -268,59 +261,41 @@ Map to app error codes:
 
 ---
 
-## Rate limiting
+## Rate limits
 
-TickTick does not publish explicit limits in public docs. Implement:
-
-- Max **5 concurrent** API requests
-- Minimum **200ms** between batch project data fetches during initial sync
-- Back off on 429
+Public docs don’t spell them out. We cap ~5 concurrent requests, put ~200ms between project-data fetches on a full pull, and back off on 429.
 
 ---
 
-## OAuth loopback server (main process)
+## OAuth loopback
 
 ```
-1. User clicks "Connect TickTick"
-2. Main starts HTTP server on 127.0.0.1:18463
-3. shell.openExternal(authorizeUrl)
-4. Browser redirects to /callback?code=...&state=...
-5. Validate state, exchange code, stop server
-6. Persist tokens, trigger initial sync
+Connect → listen on 127.0.0.1:18463
+→ open authorize URL in the browser
+→ /callback?code=&state=
+→ check state, exchange code, shut down the server
+→ save tokens, start pull
 ```
 
-**Security**
-
-- Generate cryptographically random `state`, validate on callback
-- Bind server to `127.0.0.1` only
-- Close server after success or 5-minute timeout
+Random `state`, bind to loopback only, give up after a few minutes if nothing comes back.
 
 ---
 
-## Environment variables (development)
+## Dev env
 
 ```env
 TICKTICK_CLIENT_ID=
 TICKTICK_CLIENT_SECRET=
 TICKTICK_REDIRECT_URI=http://127.0.0.1:18463/callback
 TICKTICK_API_BASE=https://api.ticktick.com/open/v1
-# Optional dev shortcut:
-# TICKTICK_ACCESS_TOKEN=tp_...
+# Optional: TICKTICK_ACCESS_TOKEN=tp_...
 ```
 
-Load via `dotenv` in main process for dev; production uses user OAuth only.
+Dev can load these from `.env`; real users go through OAuth in Settings.
 
----
-
-## Testing against API
-
-- Use a dedicated TickTick test account
-- Integration tests mock `fetch` with fixtures saved from real responses (sanitize tokens)
-- Never commit tokens or record HTTP cassettes with secrets
-
----
+Use a throwaway TickTick account for API experiments. Mock `fetch` in tests with sanitized fixtures — never commit tokens.
 
 ## References
 
 - [TickTick Help — API Support](https://help.ticktick.com/articles/7055781495671095296)
-- [TickTick CLI API mapping](https://www.npmjs.com/package/@ticktick/ticktick-cli) — comprehensive endpoint list for v2 features
+- [ticktick-cli endpoint map](https://www.npmjs.com/package/@ticktick/ticktick-cli) (handy for undocumented bits)

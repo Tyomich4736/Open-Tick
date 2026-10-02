@@ -1,23 +1,20 @@
-# Data Model
+# Data model
 
-Local entities extend TickTick remote fields with sync metadata. Types below are the **source of truth** for implementation in `shared/entities.ts`.
+What we store locally, plus the sync fields TickTick doesn’t know about. Keep these shapes aligned with `shared/entities.ts`.
 
 ---
 
-## ID strategy
+## IDs
 
-| Field | Description |
-|-------|-------------|
-| `id` | Local UUID (v4), primary key in SQLite, stable for app lifetime |
-| `remote_id` | TickTick server id; `NULL` until first successful push |
-| `remote_project_id` | Denormalized for API calls requiring project scope |
+| Field | Meaning |
+|-------|---------|
+| `id` | Local UUID — primary key, stable for the life of the row |
+| `remote_id` | TickTick’s id; null until the first successful push |
+| `remote_project_id` | Denormalized when an API call needs a project scope |
 
-**Rule:** UI and IPC always reference **local** `id`. Main process resolves `remote_id` when calling TickTick.
+The UI and IPC only ever pass local `id`. Main looks up `remote_id` when talking to TickTick.
 
-For new local-only tasks before sync:
-
-1. Insert with `remote_id = NULL`, `sync_status = 'pending_create'`
-2. After `POST /task`, set `remote_id` from response
+New local task: insert with `remote_id = NULL` and `sync_status = 'pending_create'`, then set `remote_id` from the `POST /task` response.
 
 ---
 
@@ -62,7 +59,7 @@ interface Project {
   remote_updated_at: string | null;  // ISO timestamp from last pull
   created_at: string;
   updated_at: string;
-  deleted_at: string | null;     // soft delete tombstone
+  deleted_at: string | null;     // soft delete until push confirms
 }
 ```
 
@@ -97,9 +94,7 @@ interface ProjectFolder {
 }
 ```
 
-**Delete behavior:** soft-deleting a folder sets `projects.folder_id = NULL` for its projects (ungroup). Projects are not deleted.
-
-**Expand/collapse:** persisted in `settings.folder_expanded` as `Record<folderId, boolean>`.
+Deleting a folder only ungroups: `projects.folder_id` goes null. Projects stay. Folder open/closed state lives in `settings.folder_expanded`.
 
 ### API mapping
 
@@ -151,7 +146,7 @@ interface TaskReminder {
 }
 ```
 
-Max **5** reminders per task. OS notification scheduling is Phase 11.
+Max 5 reminders per task. OS notifications are scheduled in the main process.
 
 ### Recurrence
 
@@ -173,8 +168,8 @@ Completing a recurring task marks it done and inserts the next pending instance 
 | `start_date` | `startDate` |
 | `is_all_day` | `isAllDay` |
 | `time_zone` | `timeZone` |
-| `recurrence_rule` | TickTick repeat fields (Phase 12) |
-| reminders | TickTick reminders (Phase 12) |
+| `recurrence_rule` | TickTick repeat fields |
+| reminders | TickTick reminders |
 
 ---
 
@@ -251,7 +246,7 @@ interface Setting {
 
 | Key | Type | Default |
 |-----|------|---------|
-| `theme` | `'light' \| 'dark' \| 'system'` | `'system'` — **deprecated**; use `appearance.theme_mode` (Phase 5) |
+| `theme` | `'light' \| 'dark' \| 'system'` | `'system'` — legacy; prefer `appearance.theme_mode` |
 | `timezone` | string (IANA) | OS timezone |
 | `week_starts_on` | `0 \| 1` | `1` (Monday) |
 | `calendar_day_start_hour` | number `0–23` | `0` |
@@ -262,7 +257,7 @@ interface Setting {
 | `sync_interval_minutes` | number | `3` |
 | `minimize_to_tray` | boolean | `false` |
 
-**Layout keys (Phase 8)**
+**Layout**
 
 | Key | Type | Default |
 |-----|------|---------|
@@ -270,7 +265,7 @@ interface Setting {
 | `layout.detail_width` | number | `400` |
 | `layout.sidebar_collapsed` | boolean | `false` |
 
-**Appearance keys (Phase 5)**
+**Appearance**
 
 | Key | Type | Default |
 |-----|------|---------|
@@ -297,13 +292,13 @@ interface ThemeColors {
 }
 ```
 
-Migrate legacy `theme` → `appearance.theme_mode` on first read after Phase 5 migration.
+On read, map legacy `theme` → `appearance.theme_mode` if still present.
 
 ---
 
-## Entity: StickyNote (Phase 11)
+## Entity: StickyNote
 
-Window state for task-bound desktop stickies. **Content lives on the task** (`tasks.content`, `tasks.title`) — this table only tracks window placement and pin state.
+Desktop sticky windows are just a view onto a task. Title and body live on `tasks`; this table is window placement and pin state.
 
 ```typescript
 interface StickyNote {
@@ -321,11 +316,7 @@ interface StickyNote {
 }
 ```
 
-**Rules**
-
-- Opening sticky for `task_id` creates row if missing; closing window deletes row (task remains)
-- Description edits go through `TaskRepository.update` on `content`, not stored here
-- On app launch, restore all `sticky_notes` rows as open `BrowserWindow` instances
+Open → create row if needed. Close window → delete the sticky row (task stays). Description edits go through `TaskRepository.update`. On launch, reopen every remaining sticky row.
 
 ---
 
@@ -361,11 +352,11 @@ interface TaskListItem {
 | Overdue | `due_date < start_of_today` AND pending (point tasks); duration tasks where entire range ended before today |
 | Completed | `status = completed`, sorted by `completed_at` DESC |
 
-**Duration overlap (Phase 10):** a task overlaps a day when `start_date ≤ end_of_day` AND `due_date ≥ start_of_day`. Point tasks (`start_date` null) use `due_date` only. Implement in `TaskRepository.list(filter: TaskFilter)`.
+Duration overlap: a task hits a day when `start_date ≤ end_of_day` AND `due_date ≥ start_of_day`. Point tasks (`start_date` null) use `due_date` only — see `TaskRepository.list`.
 
-**Timestamp storage:** `due_date` / `start_date` are always canonical UTC ISO strings ending in `Z` so SQLite string compares are safe. Smart-list bounds also use UTC Z (`Date.toISOString()`), never `formatISO` local offsets.
+Store `due_date` / `start_date` as UTC ISO ending in `Z` so string compares in SQLite are safe. Smart-list bounds should use the same (`Date.toISOString()`), not local-offset `formatISO`.
 
-**All-day (TickTick pull):** remote all-day values are midnight in the task `timeZone` (often encoded as the previous evening in UTC, e.g. `2026-09-20T21:00:00.000+0000` = 21 Sep 00:00 `Europe/Minsk`). On pull they are rewritten to **noon in that timezone** (UTC Z) so Today/Tomorrow match the calendar day the user sees. Locally created all-day tasks already use noon local via `combineLocalDateTime`.
+All-day from TickTick often arrives as midnight in the task timezone (which can look like the previous evening in UTC). On pull we rewrite to noon in that timezone so Today/Tomorrow match the calendar day. Locally created all-day tasks already use noon via `combineLocalDateTime`.
 
 ```typescript
 interface TaskFilter {
@@ -385,48 +376,36 @@ Show-completed keys: `list_show_completed.smart.inbox` / `list_show_completed.pr
 
 ---
 
-## Mapper functions (main process)
+## Mappers
 
-Implement in `electron/main/ticktick/mappers/`:
+Under `electron/main/ticktick/mappers/`:
 
-- `remoteTaskToLocal(dto, projectLocalId, parentLocalId?) → Partial<Task>`
-- `localTaskToRemote(task, projectRemoteId, parentRemoteId?) → TickTickTaskDto`
-- `remoteProjectToLocal(dto) → Partial<Project>`
-- `localProjectToRemote(project) → TickTickProjectDto`
+- `remoteTaskToLocal` / `localTaskToRemote`
+- `remoteProjectToLocal` / `localProjectToRemote`
+- same idea for folders
 
-**Timestamp rule:** On any local mutation, set `updated_at = now()` and `sync_status` to pending variant.
+Any local mutation bumps `updated_at` and sets a pending `sync_status`.
 
----
+## Conflicts (inbound)
 
-## Conflict detection
+1. Local `pending_*` → keep local, push later
+2. Remote newer → apply remote
+3. Local newer while still “synced” → keep local, enqueue update
+4. Equal → no-op
 
-Compare on inbound merge:
+Log case 3 when both sides moved.
 
-1. If local `sync_status` is pending_* → **keep local**, retry push (local wins while dirty)
-2. Else if `remote_updated_at > updated_at` → **apply remote**
-3. Else if `updated_at > remote_updated_at` → **keep local**, enqueue update
-4. If equal → no-op
+## Deletes
 
-Log case 3 when both changed since last sync for debugging.
+Soft-delete with `deleted_at`. After a successful remote `DELETE`, hard-delete the local row. If a synced task vanishes from a pull, mark it deleted locally.
 
----
-
-## Deleted records
-
-Use **soft deletes** (`deleted_at`) locally:
-
-- Pending delete → push `DELETE` to API → hard delete local row after 204
-- Inbound: if task missing from pull but exists locally synced → mark deleted locally
-
----
-
-## TypeScript export layout
+## Shared types
 
 ```
 shared/
-├── entities.ts      # interfaces above
-├── ipc-types.ts     # request/response for each IPC channel
-└── filters.ts       # TaskFilter, sort options
+├── entities.ts
+├── ipc-types.ts
+└── filters.ts
 ```
 
-Both electron main and renderer import from `shared/` (no Node APIs in shared code).
+Main and renderer both import from here — no Node APIs in `shared/`.

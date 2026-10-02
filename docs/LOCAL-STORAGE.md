@@ -1,10 +1,10 @@
-# Local Storage
+# Local storage
 
-SQLite database managed exclusively in the **Electron main process** via `better-sqlite3`.
+Everything durable lives in SQLite via `better-sqlite3`, opened only from the Electron main process.
 
 ---
 
-## File locations
+## Where the files live
 
 | Platform | Path |
 |----------|------|
@@ -37,13 +37,13 @@ db.pragma('foreign_keys = ON');
 db.pragma('busy_timeout = 5000');
 ```
 
-**Why WAL:** better concurrent read performance while sync worker writes.
+WAL so the UI can keep reading while sync writes.
 
 ---
 
-## Schema version 1
+## Schema (v1)
 
-Migration file: `electron/main/db/migrations/001_initial.sql`
+`electron/main/db/migrations/001_initial.sql` (don’t edit after it’s shipped — add new migrations instead):
 
 ```sql
 -- schema_migrations
@@ -208,13 +208,13 @@ function runMigrations(db: Database, migrations: Migration[]) {
 }
 ```
 
-Future migrations (`002_...`) alter tables; never edit `001` after release.
+Later migrations only go forward (`002_…`).
 
 ---
 
-## Repository pattern
+## Repositories
 
-Each repository receives `Database` in constructor.
+Pass the shared `Database` into each repo.
 
 ```typescript
 class TaskRepository {
@@ -228,13 +228,13 @@ class TaskRepository {
 }
 ```
 
-**Transactions:** wrap multi-table updates (task + tags) in `db.transaction()`.
+Multi-table writes (task + tags) go in `db.transaction()`.
 
 ---
 
-## Auth token storage
+## Auth tokens
 
-**Preferred:** Electron `safeStorage`
+Prefer Electron `safeStorage`:
 
 ```typescript
 import { safeStorage } from 'electron';
@@ -250,57 +250,46 @@ function saveTokens(tokens: OAuthTokens) {
 }
 ```
 
-Never store tokens in SQLite (avoid accidental backup export exposure) or renderer localStorage.
+Don’t put tokens in SQLite (backups) or renderer storage.
 
 ---
 
-## Backup and restore
+## Backup / restore
 
-**Manual backup** (Phase 12):
-
-1. Pause sync worker
-2. `VACUUM INTO 'backups/opentick-YYYYMMDD.db'`
-3. Resume sync
-
-**Restore:** replace db file while app stopped; run migrations on next start.
+Export: pause sync → `VACUUM INTO 'backups/opentick-YYYYMMDD.db'` → resume.  
+Restore: replace the db while the app is quit; migrations run on next start.
 
 ---
 
-## Performance guidelines
+## Performance
 
 | Scenario | Approach |
 |----------|----------|
-| Task list > 500 rows | Virtualized list (react-window) |
-| Full-text search | Phase 2+: FTS5 virtual table on `title`, `content` |
-| Bulk import sync | Batch inserts in transactions of 100 |
-| N+1 tag loads | Single query with `GROUP_CONCAT` or secondary query by task ids |
+| Long lists | Virtualize (`@tanstack/react-virtual`) |
+| Search | FTS5 on title + content |
+| Bulk pull | Inserts in transactions (~100 rows) |
+| Tags | Join / `GROUP_CONCAT`, not N+1 |
 
 ---
 
-## Dev seed data
+## Seed data
 
-Script `electron/main/db/seed.ts` (dev only):
-
-- 3 projects (Work, Personal, + inbox flag on one)
-- 20 tasks with varied due dates, priorities, 5 subtasks
-- 4 tags
-
-Gate with `if (process.env.NODE_ENV === 'development' && argv.includes('--seed'))`.
+`npm run dev:seed` (or the seed script under `electron/main/db/`) loads a few projects, ~20 tasks, and some tags. Dev only.
 
 ---
 
-## Integrity rules
+## Integrity
 
-1. Cannot hard-delete project with pending tasks — soft-delete cascade or block
-2. `parent_id` must share same `project_id` as parent task
-3. Unique `remote_id` when not null — use upsert on inbound sync
-4. Inbox project: at most one row with `is_inbox = 1`
+- Don’t hard-delete a project that still has tasks — soft-delete or block
+- Subtask `parent_id` must be in the same project
+- `remote_id` unique when set (upsert on pull)
+- At most one `is_inbox = 1` project
 
 ---
 
-## Testing
+## Tests
 
-Use `:memory:` SQLite for unit tests:
+`:memory:` SQLite for unit tests:
 
 ```typescript
 const db = new Database(':memory:');
@@ -308,4 +297,4 @@ runMigrations(db, migrations);
 const repo = new TaskRepository(db);
 ```
 
-For integration tests, copy fixture `.db` file to temp directory.
+Integration: copy a fixture `.db` into a temp dir.

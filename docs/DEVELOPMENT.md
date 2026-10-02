@@ -1,6 +1,6 @@
-# Development Guide
+# Development
 
-Setup, scripts, testing, and packaging for the Electron + React Open Tick app.
+Day-to-day setup for Open Tick (Electron + React).
 
 ---
 
@@ -8,35 +8,28 @@ Setup, scripts, testing, and packaging for the Electron + React Open Tick app.
 
 | Tool | Version |
 |------|---------|
-| Node.js | 20 LTS or 22 |
+| Node.js | 20 LTS (or 22) |
 | npm | 10+ |
-| Git | any recent |
-| Windows | VS Build Tools (for better-sqlite3 native compile) |
+| Windows | VS Build Tools — “Desktop development with C++” (for `better-sqlite3`) |
 | macOS | Xcode Command Line Tools |
 
 ---
 
-## Initial setup (when implementing Phase 0)
+## First run
 
 ```bash
-# From project root
-npm create @electron-vite/create@latest . -- --template react-ts
-npm install better-sqlite3 date-fns date-fns-tz zustand @tanstack/react-query
-npm install -D @types/better-sqlite3 tailwindcss vitest @testing-library/react
+npm install
+npm run rebuild:native   # if better-sqlite3 fails to load
+npm run dev
 ```
 
-Configure native rebuild:
+Sample data:
 
 ```bash
-npm install -D electron-rebuild
-# postinstall script: electron-rebuild -f -w better-sqlite3
+npm run dev:seed
 ```
 
----
-
-## Environment
-
-Copy `.env.example` → `.env` (gitignored):
+Copy `.env.example` → `.env` if you want OAuth client values in the environment (optional — the Account settings UI can hold them too):
 
 ```env
 TICKTICK_CLIENT_ID=
@@ -44,231 +37,66 @@ TICKTICK_CLIENT_SECRET=
 TICKTICK_REDIRECT_URI=http://127.0.0.1:18463/callback
 ```
 
-Register redirect URI in TickTick developer portal to match exactly.
+Redirect URI must match the TickTick developer portal exactly.
 
 ---
 
-## npm scripts (planned)
+## Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start electron-vite dev server + Electron |
-| `npm run build` | Production build (renderer + main) |
-| `npm run preview` | Run packaged build locally |
-| `npm run lint` | ESLint |
-| `npm run typecheck` | `tsc --noEmit` in all packages |
-| `npm run test` | Vitest unit tests |
-| `npm run test:e2e` | Playwright against built app |
-| `npm run package:win` | electron-builder Windows |
-| `npm run package:mac` | electron-builder macOS |
-| `npm run db:seed` | Dev seed data |
-
----
-
-## Project conventions
-
-### TypeScript
-
-- `strict: true`
-- Path alias: `@/` → `src/`, `@shared/` → `shared/`
-- No `any` without eslint disable comment
-
-### Commits
-
-Conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `test:`
-
-### Branches
-
-- `main` — stable
-- `feat/phase-N-description` — feature branches aligned to roadmap phases
+| Script | What it does |
+|--------|----------------|
+| `npm run dev` | Electron + Vite hot reload |
+| `npm run dev:seed` | Same, with seed data |
+| `npm run build` | Production build → `out/` |
+| `npm run preview` | Run the production build |
+| `npm run test` | Vitest |
+| `npm run test:watch` | Vitest watch |
+| `npm run lint` / `typecheck` | Quality gates |
+| `npm run format` | Prettier |
+| `npm run package:win` / `:mac` / `:linux` | Installers via electron-builder |
+| `npm run rebuild:native` | Rebuild `better-sqlite3` for Electron |
 
 ---
 
-## Running on Windows
+## Conventions
 
-```powershell
-cd /path/to/open-tick
-npm run dev
-```
-
-If `better-sqlite3` fails to load:
-
-```powershell
-npx electron-rebuild -f -w better-sqlite3
-```
-
----
-
-## Running on macOS
-
-```bash
-npm run dev
-```
-
-Gatekeeper may block unsigned builds — allow in System Settings for dev.
+- TypeScript `strict`, aliases `@/` → `src/`, `@shared/` → `shared/`
+- Prefer conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `test:`
+- Feature branches named after the work (`feat/phase-14-push`, etc.)
 
 ---
 
 ## Debugging
 
-### Main process
+**Main** — electron-vite can launch with inspect; a VS Code launch config pointing at `electron-vite` with `--sourcemap` works fine.
 
-- electron-vite supports `--inspect` on main
-- VS Code launch config:
+**Renderer** — DevTools in the window (`Ctrl/Cmd+Shift+I`).
 
-```json
-{
-  "type": "node",
-  "request": "launch",
-  "name": "Debug Main",
-  "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron-vite",
-  "args": ["--sourcemap", "--remote-debugging-port=9222"]
-}
-```
-
-### Renderer
-
-- Chrome DevTools in Electron window (Ctrl+Shift+I)
-- React DevTools extension optional
-
-### SQLite
-
-- Dev-only IPC: `debug:query` with read-only SQL (never in production builds)
+**SQLite** — keep a single connection in main. Don’t open the DB from the renderer.
 
 ---
 
-## Testing
+## Packaging notes
 
-### Unit tests (Vitest)
-
-```
-tests/
-├── unit/
-│   ├── repositories/
-│   ├── mappers/
-│   └── filters/
-└── fixtures/
-    └── ticktick/
-        ├── projects.json
-        └── project-data.json
-```
-
-Run: `npm run test`
-
-### Component tests
-
-- Testing Library + jsdom for `TaskRow`, `QuickAdd`
-- Mock IPC via `window.ticktick` stub in `setupTests.ts`
-
-### E2E (Playwright)
-
-```typescript
-// tests/e2e/create-task.spec.ts
-test('creates task offline', async ({ electronApp }) => {
-  const page = await electronApp.firstWindow();
-  await page.getByPlaceholder('Add task').fill('Test task');
-  await page.keyboard.press('Enter');
-  await expect(page.getByText('Test task')).toBeVisible();
-});
-```
-
----
-
-## Packaging
-
-`electron-builder.yml` sketch:
-
-```yaml
-appId: com.opentick.app
-productName: Open Tick
-directories:
-  output: release
-files:
-  - dist/**/*
-  - resources/**/*
-win:
-  target: nsis
-mac:
-  target: dmg
-  category: public.app-category.productivity
-```
-
-Native module note: ensure `better-sqlite3` is unpacked from asar:
-
-```yaml
-asarUnpack:
-  - "**/*.node"
-```
-
----
-
-## CI (GitHub Actions sketch)
-
-```yaml
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm run test
-```
-
-Build matrix for Win/Mac on release tags only (requires code signing secrets).
-
----
-
-## Code signing (release)
-
-### macOS
-
-- Apple Developer ID Application certificate
-- Notarize with `@electron/notarize`
-- Hardened runtime entitlements for Electron
-
-### Windows
-
-- Authenticode certificate (optional for personal use)
-- SmartScreen warnings expected without cert
-
-Document in README when approaching Phase 8.
-
----
-
-## .gitignore essentials
-
-```
-node_modules/
-dist/
-release/
-.env
-*.db
-auth.enc
-logs/
-.DS_Store
-Thumbs.db
-```
+`better-sqlite3` is a native module — unpack `*.node` from asar (`asarUnpack` in electron-builder). Unsigned Windows builds will trip SmartScreen; macOS Gatekeeper will complain until notarized.
 
 ---
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| Blank window in dev | Check preload path in electron-vite config |
-| IPC invoke timeout | Verify handler registered before window load |
-| OAuth callback never hits | Firewall blocking loopback; try different port |
-| Sync duplicates | Check unique index on `remote_id`; review merge logic |
-| WAL locked | Ensure single DB connection in main process |
+| Symptom | Likely fix |
+|---------|------------|
+| Blank window in dev | Preload path in electron-vite config |
+| IPC timeout | Handler registered after the window already loaded |
+| OAuth never returns | Firewall / loopback; confirm port `18463` |
+| Sync duplicates | Unique index on `remote_id`; check merge skip of dirty rows |
+| WAL locked | More than one process holding the DB |
 
 ---
 
-## Related docs
+## Related
 
-- [ROADMAP.md](./ROADMAP.md) — what to build next
-- [IMPLEMENTATION-GUIDE.md](./IMPLEMENTATION-GUIDE.md) — agent-oriented build order
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — process model
+- [ROADMAP.md](./ROADMAP.md) — what’s next
+- [IMPLEMENTATION-GUIDE.md](./IMPLEMENTATION-GUIDE.md) — incremental sync / release work left
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — process split
+- [MANUAL-TESTS.md](./MANUAL-TESTS.md) — hand-test checklist
