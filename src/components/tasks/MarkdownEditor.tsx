@@ -96,8 +96,140 @@ function ToolbarButton({
   )
 }
 
+function normalizeLinkUrl(raw: string): string {
+  const url = raw.trim()
+  if (!url) return ''
+  if (/^(https?:|mailto:|tel:|#|\/)/i.test(url)) return url
+  return `https://${url}`
+}
+
+function applyLink(editor: Editor, rawUrl: string) {
+  const href = normalizeLinkUrl(rawUrl)
+  if (!href) {
+    editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    return
+  }
+
+  const { empty } = editor.state.selection
+  if (empty) {
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: 'text',
+        text: href,
+        marks: [{ type: 'link', attrs: { href } }],
+      })
+      .run()
+    return
+  }
+
+  editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
+}
+
+function LinkPopover({
+  editor,
+  anchorRect,
+  onClose,
+}: {
+  editor: Editor
+  anchorRect: DOMRect
+  onClose: () => void
+}) {
+  const previous = (editor.getAttributes('link').href as string | undefined) ?? ''
+  const [url, setUrl] = useState(previous || 'https://')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const width = 320
+  const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - width - 8))
+  const top = Math.min(anchorRect.bottom + 6, window.innerHeight - 56)
+
+  function submit() {
+    applyLink(editor, url)
+    onClose()
+  }
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        className="fixed inset-0 z-[1100] cursor-default bg-transparent"
+        aria-label="Dismiss link editor"
+        onMouseDown={(e) => {
+          e.preventDefault()
+          onClose()
+        }}
+      />
+      <div
+        role="dialog"
+        aria-label="Edit link"
+        className="fixed z-[1101] flex w-[320px] items-center gap-1 rounded-lg border border-border bg-bg-primary p-1.5 shadow-lg"
+        style={{ top, left }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <input
+          ref={inputRef}
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+          }}
+          placeholder="https://"
+          className="min-w-0 flex-1 rounded-md border border-border bg-bg-primary px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-medium text-white hover:opacity-90"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={submit}
+        >
+          Apply
+        </button>
+        {previous ? (
+          <button
+            type="button"
+            className="rounded-md px-2 py-1.5 text-xs text-text-muted hover:bg-black/5 hover:text-text-primary dark:hover:bg-white/5"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              editor.chain().focus().extendMarkRange('link').unsetLink().run()
+              onClose()
+            }}
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+    </>,
+    document.body,
+  )
+}
+
 function FormatToolbar({ editor, compact }: { editor: Editor; compact?: boolean }) {
   const icon = compact ? 'size-3.5' : 'size-4'
+  const linkBtnRef = useRef<HTMLButtonElement>(null)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkAnchor, setLinkAnchor] = useState<DOMRect | null>(null)
+
   useEditorState({
     editor,
     selector: (ctx) => ({
@@ -118,15 +250,11 @@ function FormatToolbar({ editor, compact }: { editor: Editor; compact?: boolean 
     }),
   })
 
-  const setLink = () => {
-    const previous = editor.getAttributes('link').href as string | undefined
-    const url = window.prompt('Link URL', previous ?? 'https://')
-    if (url === null) return
-    if (url.trim() === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run()
-      return
-    }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run()
+  function openLinkPopover() {
+    const rect = linkBtnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setLinkAnchor(rect)
+    setLinkOpen(true)
   }
 
   return (
@@ -228,9 +356,33 @@ function FormatToolbar({ editor, compact }: { editor: Editor; compact?: boolean 
       >
         <Code2 className={icon} />
       </ToolbarButton>
-      <ToolbarButton label="Link" active={editor.isActive('link')} onClick={setLink}>
+      <button
+        ref={linkBtnRef}
+        type="button"
+        title="Link"
+        aria-label="Link"
+        aria-pressed={editor.isActive('link')}
+        aria-expanded={linkOpen}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={openLinkPopover}
+        className={`rounded p-1.5 transition-colors ${
+          editor.isActive('link')
+            ? 'bg-accent/15 text-accent'
+            : 'text-text-muted hover:bg-black/5 hover:text-text-primary dark:hover:bg-white/5'
+        }`}
+      >
         <LinkIcon className={icon} />
-      </ToolbarButton>
+      </button>
+      {linkOpen && linkAnchor ? (
+        <LinkPopover
+          editor={editor}
+          anchorRect={linkAnchor}
+          onClose={() => {
+            setLinkOpen(false)
+            setLinkAnchor(null)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -337,6 +489,32 @@ function SelectionToolbar({ editor }: { editor: Editor }) {
   )
 }
 
+function openEditorLink(href: string) {
+  const url = href.trim()
+  if (!url || url === '#') return
+  // Main process setWindowOpenHandler → shell.openExternal
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+const LINK_OPEN_HINT =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+    ? '⌘+click to open'
+    : 'Ctrl+click to open'
+
+function linkHrefFromClick(view: { state: Editor['state'] }, pos: number, event: MouseEvent): string | null {
+  const el = (event.target as HTMLElement | null)?.closest?.('a')
+  const fromDom = el?.getAttribute('href')
+  if (fromDom) return fromDom
+
+  const linkType = view.state.schema.marks.link
+  if (!linkType) return null
+  const $pos = view.state.doc.resolve(pos)
+  const mark =
+    $pos.marks().find((m) => m.type === linkType) ??
+    view.state.doc.nodeAt(pos)?.marks.find((m) => m.type === linkType)
+  return (mark?.attrs.href as string | undefined) ?? null
+}
+
 export function MarkdownEditor({ value, onChange, variant = 'default' }: MarkdownEditorProps) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -356,7 +534,11 @@ export function MarkdownEditor({ value, onChange, variant = 'default' }: Markdow
       ParagraphPreserveBlankLines,
       Link.configure({
         openOnClick: false,
-        HTMLAttributes: { class: 'text-accent underline' },
+        HTMLAttributes: {
+          class: 'text-accent underline',
+          title: LINK_OPEN_HINT,
+          rel: 'noopener noreferrer',
+        },
       }),
       TaskList,
       TaskItemWithMarkdownInput,
@@ -375,6 +557,32 @@ export function MarkdownEditor({ value, onChange, variant = 'default' }: Markdow
         class: sticky
           ? 'markdown-body markdown-body--sticky ProseMirror min-h-[6rem] flex-1 overflow-y-auto px-1 py-1 text-[13px] outline-none'
           : 'markdown-body ProseMirror min-h-[8rem] max-h-[40vh] overflow-y-auto px-3 py-2 text-sm text-text-primary outline-none',
+      },
+      handleClick: (view, pos, event) => {
+        if (!(event.ctrlKey || event.metaKey)) return false
+        const href = linkHrefFromClick(view, pos, event)
+        if (!href) return false
+        event.preventDefault()
+        openEditorLink(href)
+        return true
+      },
+      handleDOMEvents: {
+        keydown: (view, event) => {
+          if (event.key === 'Control' || event.key === 'Meta') {
+            view.dom.classList.add('link-mod-held')
+          }
+          return false
+        },
+        keyup: (view, event) => {
+          if (event.key === 'Control' || event.key === 'Meta') {
+            view.dom.classList.remove('link-mod-held')
+          }
+          return false
+        },
+        blur: (view) => {
+          view.dom.classList.remove('link-mod-held')
+          return false
+        },
       },
     },
     onUpdate: ({ editor: ed }) => {

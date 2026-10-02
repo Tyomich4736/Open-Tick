@@ -4,6 +4,12 @@ copyright: Copyright © 2026
 directories:
   buildResources: resources
   output: release
+# Runtime tray/window icons (buildResources alone is only used at pack time).
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/icon.ico
+    to: icon.ico
 # Keep Chromium locale packs small (each language is ~0.5–1.5 MB).
 electronLanguages:
   - en-US
@@ -11,6 +17,8 @@ electronLanguages:
 files:
   - out/**/*
   - package.json
+  - resources/icon.png
+  - resources/icon.ico
   # Renderer/UI packages are already bundled into out/renderer — do not ship again.
   - '!node_modules/@floating-ui/**'
   - '!node_modules/@tanstack/**'

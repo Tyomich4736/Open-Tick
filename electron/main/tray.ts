@@ -1,6 +1,6 @@
-import { Menu, Tray, nativeImage } from 'electron'
+import { Menu, Tray, nativeImage, screen, type NativeImage } from 'electron'
 import { app } from 'electron'
-import { appIconPath } from './paths'
+import { trayIconPath } from './paths'
 import { openQuickCaptureWindow } from './windows/quickCaptureWindow'
 import { requestNewSticky } from './desktop/stickyActions'
 import { getMainWindowRef, showMainWindow } from './desktop/mainWindowRef'
@@ -14,13 +14,26 @@ function hideMainWindow(): void {
   win.hide()
 }
 
+function createTrayImage(): NativeImage {
+  const path = trayIconPath()
+  const icon = nativeImage.createFromPath(path)
+  if (icon.isEmpty()) {
+    console.error(`[tray] Failed to load icon from ${path}`)
+    return nativeImage.createEmpty()
+  }
+
+  // .ico already contains 16/24/32… sizes — let Windows pick.
+  if (path.toLowerCase().endsWith('.ico')) return icon
+
+  const scale = screen.getPrimaryDisplay()?.scaleFactor || 1
+  const size = Math.max(16, Math.round(16 * scale))
+  return icon.resize({ width: size, height: size })
+}
+
 export function createAppTray(): Tray {
   if (tray && !tray.isDestroyed()) return tray
 
-  const icon = nativeImage.createFromPath(appIconPath())
-  tray = new Tray(
-    icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 16, height: 16 }),
-  )
+  tray = new Tray(createTrayImage())
   tray.setToolTip('Open Tick')
 
   const rebuildMenu = () => {
