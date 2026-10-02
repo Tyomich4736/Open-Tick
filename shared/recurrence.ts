@@ -92,3 +92,12 @@ export function reminderLabel(reminder: Pick<TaskReminder, 'kind' | 'offset_minu
 }
 
 export const MAX_REMINDERS = 5
+
+export const AT_DUE_REMINDER: ReminderInput = { kind: 'at_due', offset_minutes: 0 }
+
+/** Ensure a timed task has an “At due time” reminder (no-op if already present or at cap). */
+export function ensureAtDueReminder(reminders: ReminderInput[]): ReminderInput[] {
+  if (reminders.some((r) => r.kind === 'at_due' || r.offset_minutes === 0)) return reminders
+  if (reminders.length >= MAX_REMINDERS) return reminders
+  return [...reminders, AT_DUE_REMINDER]
+}

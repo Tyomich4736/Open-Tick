@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Bell, Calendar } from 'lucide-react'
 import type { ReminderInput } from '@shared/recurrence'
-import { reminderLabel } from '@shared/recurrence'
+import { ensureAtDueReminder, reminderLabel } from '@shared/recurrence'
 import { CalendarPicker } from '@/components/tasks/CalendarPicker'
 import { RemindersEditor } from '@/components/tasks/RemindersEditor'
 import { TimeSelect } from '@/components/tasks/TimeSelect'
@@ -94,11 +94,15 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
       const startH = h === 0 && m === 0 ? 0 : Math.max(0, h - 1)
       startTime = `${String(startH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
     }
-    onChange({
+    const nextValue: ScheduleValue = {
       ...value,
       start_date: combineLocalDateTime(dateStr, startTime, value.is_all_day),
       due_date: combineLocalDateTime(dateStr, endTime, value.is_all_day),
-    })
+    }
+    if (!value.is_all_day) {
+      nextValue.reminders = ensureAtDueReminder(value.reminders)
+    }
+    onChange(nextValue)
   }
 
   const setPointDate = (dateStr: string) => {
@@ -107,6 +111,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
       ...value,
       start_date: null,
       due_date: combineLocalDateTime(dateStr, time, value.is_all_day),
+      reminders: value.is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
     })
   }
 
@@ -117,6 +122,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
       ...value,
       start_date: combineLocalDateTime(dateStr, startTime, value.is_all_day),
       due_date: combineLocalDateTime(dateStr, endTime, value.is_all_day),
+      reminders: value.is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
     })
   }
 
@@ -126,6 +132,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
         ...value,
         is_all_day: false,
         due_date: combineLocalDateTime(durationDateStr, timeStr, false),
+        reminders: ensureAtDueReminder(value.reminders),
       })
       return
     }
@@ -135,6 +142,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
       is_all_day: false,
       start_date: null,
       due_date: combineLocalDateTime(dateStr, timeStr, false),
+      reminders: ensureAtDueReminder(value.reminders),
     })
   }
 
@@ -151,6 +159,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
             false,
           )
         : combineLocalDateTime(durationDateStr, '10:00', false),
+      reminders: ensureAtDueReminder(value.reminders),
     })
   }
 
@@ -179,6 +188,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
               : toTimeInputValue(value.due_date) || '10:00',
           is_all_day,
         ),
+        reminders: is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
       })
       return
     }
@@ -198,6 +208,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
           )
         : value.due_date,
       start_date: null,
+      reminders: is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
     })
   }
 
