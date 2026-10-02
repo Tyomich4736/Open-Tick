@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { app } from 'electron'
 
 /** electron-vite bundles main into `out/main/index.js` — always resolve from there. */
 export function preloadScriptPath(): string {
@@ -10,5 +11,9 @@ export function rendererHtmlPath(): string {
 }
 
 export function appIconPath(): string {
-  return join(process.cwd(), 'resources', 'icon.png')
+  // Packaged: resources live next to the executable; cwd is unreliable on Windows.
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'icon.png')
+  }
+  return join(app.getAppPath(), 'resources', 'icon.png')
 }

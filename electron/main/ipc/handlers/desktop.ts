@@ -1,4 +1,5 @@
 import { BrowserWindow, shell, app } from 'electron'
+import { join } from 'node:path'
 import {
   applyDesktopSettings,
   isMinimizeToTrayEnabled,
@@ -34,17 +35,31 @@ function schedulePersistBounds(win: BrowserWindow): void {
   saveBoundsTimer = setTimeout(() => persistBounds(win), 400)
 }
 
+function revealMainWindow(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  if (!win.isVisible()) win.show()
+  win.focus()
+}
+
 export function createMainWindow(): BrowserWindow {
-  const { bounds, maximized } = loadMainWindowState()
+  let bounds: ReturnType<typeof loadMainWindowState>['bounds'] = null
+  let maximized = false
+  try {
+    ;({ bounds, maximized } = loadMainWindowState())
+  } catch (err) {
+    console.error('[window] loadMainWindowState failed, using defaults', err)
+  }
 
   const mainWindow = new BrowserWindow({
     width: bounds?.width ?? DEFAULT_BOUNDS.width,
     height: bounds?.height ?? DEFAULT_BOUNDS.height,
-    x: bounds?.x,
-    y: bounds?.y,
+    ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
     minWidth: 900,
     minHeight: 600,
-    show: false,
+    // Show immediately on Windows — waiting only on ready-to-show left zombie processes
+    // when DB/native init or load stalled.
+    show: true,
     autoHideMenuBar: true,
     title: 'TickTick Clone',
     icon: appIconPath(),
@@ -56,10 +71,12 @@ export function createMainWindow(): BrowserWindow {
     },
   })
 
+  if (!bounds) mainWindow.center()
   if (maximized) mainWindow.maximize()
+  mainWindow.focus()
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error('[window] failed to load', { code, desc, url, html: rendererHtmlPath() })
   })
 
   mainWindow.on('resize', () => schedulePersistBounds(mainWindow))
@@ -88,9 +105,14 @@ export function createMainWindow(): BrowserWindow {
   })
 
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(rendererHtmlPath())
+    const html = rendererHtmlPath()
+    void mainWindow.loadFile(html).catch((err) => {
+      console.error('[window] loadFile failed', html, err)
+      const fallback = join(app.getAppPath(), 'out', 'renderer', 'index.html')
+      void mainWindow.loadFile(fallback)
+    })
   }
 
   setMainWindowRef(mainWindow)
@@ -100,9 +122,7 @@ export function createMainWindow(): BrowserWindow {
 export function showOrCreateMainWindow(): BrowserWindow {
   const existing = getMainWindowRef()
   if (existing) {
-    if (existing.isMinimized()) existing.restore()
-    existing.show()
-    existing.focus()
+    revealMainWindow(existing)
     return existing
   }
   return createMainWindow()
@@ -123,6 +143,8 @@ export function handleDesktopResetWindow(): IpcResult<void> {
         height: DEFAULT_BOUNDS.height,
       })
       win.center()
+      win.show()
+      win.focus()
     }
   })
 }

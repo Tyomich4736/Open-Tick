@@ -4,16 +4,52 @@ copyright: Copyright © 2026
 directories:
   buildResources: resources
   output: release
+# Keep Chromium locale packs small (each language is ~0.5–1.5 MB).
+electronLanguages:
+  - en-US
+  - ru
 files:
   - out/**/*
   - package.json
+  # Renderer/UI packages are already bundled into out/renderer — do not ship again.
+  - '!node_modules/@floating-ui/**'
+  - '!node_modules/@tanstack/**'
+  - '!node_modules/@tiptap/**'
+  - '!node_modules/date-fns/**'
+  - '!node_modules/date-fns-tz/**'
+  - '!node_modules/dotenv/**'
+  - '!node_modules/linkifyjs/**'
+  - '!node_modules/lucide-react/**'
+  - '!node_modules/markdown-it/**'
+  - '!node_modules/prosemirror-*/**'
+  - '!node_modules/react/**'
+  - '!node_modules/react-dom/**'
+  - '!node_modules/react-router/**'
+  - '!node_modules/react-router-dom/**'
+  - '!node_modules/tiptap-markdown/**'
+  - '!node_modules/zustand/**'
+  # better-sqlite3: keep runtime .node + JS, drop source / amalgamation (~20 MB).
+  - '!node_modules/better-sqlite3/deps/**'
+  - '!node_modules/better-sqlite3/src/**'
+  - '!node_modules/better-sqlite3/build/Release/obj/**'
+  - '!node_modules/better-sqlite3/build/deps/**'
+  - '!node_modules/better-sqlite3/build/Release/*.lib'
+  - '!node_modules/better-sqlite3/build/Release/*.exp'
+  - '!node_modules/better-sqlite3/build/Release/*.iobj'
+  - '!node_modules/better-sqlite3/build/Release/*.ipdb'
+  - '!node_modules/better-sqlite3/build/Release/*.pdb'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron/*'
   - '!docs/*'
   - '!{.env,.env.*,.eslintrc.*,.prettierrc.*,eslint.config.*,electron.vite.config.*,tsconfig.*}'
 asarUnpack:
-  - '**/*.node'
+  # Unpack the whole native module (not only *.node) so require() resolves on Windows.
+  - '**/node_modules/better-sqlite3/**'
+  - '**/node_modules/bindings/**'
+  - '**/node_modules/file-uri-to-path/**'
+compression: maximum
+beforePack: scripts/beforePack.cjs
 win:
   icon: icon.png
   target:
@@ -44,3 +80,4 @@ linux:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
