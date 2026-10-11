@@ -1,7 +1,7 @@
 {
   "name": "open-tick",
   "productName": "Open Tick",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Open Tick — cross-platform local-first task manager with TickTick API sync",
   "main": "./out/main/index.js",
   "author": {

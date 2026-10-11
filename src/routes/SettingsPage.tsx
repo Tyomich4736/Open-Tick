@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AboutSettings } from '@/components/settings/AboutSettings'
 import { AppearanceSettings } from '@/components/settings/AppearanceSettings'
 import { AccountSettings } from '@/components/settings/AccountSettings'
 import { CalendarSettings } from '@/components/settings/CalendarSettings'
@@ -8,7 +9,14 @@ import { useTimeFormat, type TimeFormat } from '@/hooks/useTimeFormat'
 import { useListDensity } from '@/hooks/useLayoutSettings'
 import { listTimezones, useTimezone } from '@/hooks/useTimezone'
 
-type SettingsTab = 'general' | 'calendar' | 'appearance' | 'desktop' | 'notifications' | 'account'
+type SettingsTab =
+  | 'general'
+  | 'calendar'
+  | 'appearance'
+  | 'desktop'
+  | 'notifications'
+  | 'account'
+  | 'about'
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -17,6 +25,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'desktop', label: 'Desktop' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'account', label: 'Account' },
+  { id: 'about', label: 'About' },
 ]
 
 function GeneralSettings() {
@@ -129,6 +138,7 @@ export function SettingsPage() {
         {tab === 'desktop' && <DesktopSettings />}
         {tab === 'notifications' && <NotificationsSettings />}
         {tab === 'account' && <AccountSettings />}
+        {tab === 'about' && <AboutSettings />}
       </div>
     </div>
   )
