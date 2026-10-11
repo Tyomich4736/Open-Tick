@@ -86,15 +86,30 @@ export class TickTickClient {
       return this.request<T>(method, path, body, true)
     }
 
-    if (response.status === 204) {
-      return undefined as T
-    }
-
     if (!response.ok) {
       throw await TickTickApiError.fromResponse(response)
     }
 
-    return (await response.json()) as T
+    // Complete / delete (and some updates) often return 200/204 with an empty body.
+    // response.json() throws "Unexpected end of JSON input" on empty payloads.
+    if (response.status === 204) {
+      return undefined as T
+    }
+
+    const text = await response.text()
+    if (!text.trim()) {
+      return undefined as T
+    }
+
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      throw new TickTickApiError(
+        `Invalid JSON from TickTick (${response.status})`,
+        response.status,
+        text.slice(0, 200),
+      )
+    }
   }
 
   /** GET /project */
