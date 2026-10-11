@@ -35,30 +35,11 @@ export function MarkdownEditor({ value, onChange, variant = 'default' }: Markdow
           : 'markdown-body ProseMirror min-h-[8rem] max-h-[40vh] overflow-y-auto px-3 py-2 text-sm text-text-primary outline-none',
       },
       handleClick: (view, pos, event) => {
-        if (!(event.ctrlKey || event.metaKey)) return false
         const href = linkHrefFromClick(view, pos, event)
         if (!href) return false
         event.preventDefault()
         openEditorLink(href)
         return true
-      },
-      handleDOMEvents: {
-        keydown: (view, event) => {
-          if (event.key === 'Control' || event.key === 'Meta') {
-            view.dom.classList.add('link-mod-held')
-          }
-          return false
-        },
-        keyup: (view, event) => {
-          if (event.key === 'Control' || event.key === 'Meta') {
-            view.dom.classList.remove('link-mod-held')
-          }
-          return false
-        },
-        blur: (view) => {
-          view.dom.classList.remove('link-mod-held')
-          return false
-        },
       },
     },
     onUpdate: ({ editor: ed }) => {
@@ -114,7 +95,7 @@ export function MarkdownEditor({ value, onChange, variant = 'default' }: Markdow
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-bg-primary focus-within:border-accent">
+    <div className="overflow-hidden rounded-lg border border-border bg-bg-primary">
       <EditorContent editor={editor} />
       <SelectionToolbar editor={editor} />
       <div className="border-t border-border bg-bg-sidebar/60">

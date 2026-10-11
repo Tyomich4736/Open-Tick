@@ -212,10 +212,6 @@ button {
 .markdown-body a {
   color: var(--color-accent);
   text-decoration: underline;
-  cursor: text;
-}
-
-.markdown-body.link-mod-held a {
   cursor: pointer;
 }
 

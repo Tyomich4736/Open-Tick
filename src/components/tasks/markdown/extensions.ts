@@ -4,6 +4,7 @@ import Paragraph from '@tiptap/extension-paragraph'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
 import TaskList from '@tiptap/extension-task-list'
+import { find as findLinks } from 'linkifyjs'
 import { Markdown } from 'tiptap-markdown'
 import type { MarkdownStorage } from 'tiptap-markdown'
 import { TaskItemWithMarkdownInput } from '@/components/tasks/taskListMarkdownInput'
@@ -37,11 +38,6 @@ export const ParagraphPreserveBlankLines = Paragraph.extend({
   },
 })
 
-export const LINK_OPEN_HINT =
-  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
-    ? '⌘+click to open'
-    : 'Ctrl+click to open'
-
 export function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown()
 }
@@ -51,6 +47,22 @@ export function openEditorLink(href: string) {
   if (!url || url === '#') return
   // Main process setWindowOpenHandler → shell.openExternal
   window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function bareUrlAtPos(view: { state: Editor['state'] }, pos: number): string | null {
+  const $pos = view.state.doc.resolve(pos)
+  const parent = $pos.parent
+  if (!parent.isTextblock) return null
+
+  const text = parent.textBetween(0, parent.content.size, undefined, ' ')
+  if (!text.trim()) return null
+
+  const offsetInParent = $pos.parentOffset
+  const matches = findLinks(text, { defaultProtocol: 'https' })
+  const hit = matches.find(
+    (item) => item.isLink && offsetInParent >= item.start && offsetInParent <= item.end,
+  )
+  return hit?.href ?? null
 }
 
 export function linkHrefFromClick(
@@ -63,12 +75,17 @@ export function linkHrefFromClick(
   if (fromDom) return fromDom
 
   const linkType = view.state.schema.marks.link
-  if (!linkType) return null
-  const $pos = view.state.doc.resolve(pos)
-  const mark =
-    $pos.marks().find((m) => m.type === linkType) ??
-    view.state.doc.nodeAt(pos)?.marks.find((m) => m.type === linkType)
-  return (mark?.attrs.href as string | undefined) ?? null
+  if (linkType) {
+    const $pos = view.state.doc.resolve(pos)
+    const mark =
+      $pos.marks().find((m) => m.type === linkType) ??
+      view.state.doc.nodeAt(pos)?.marks.find((m) => m.type === linkType)
+    const href = mark?.attrs.href as string | undefined
+    if (href) return href
+  }
+
+  // Plain-text URLs (not markdown `[text](url)` / link marks)
+  return bareUrlAtPos(view, pos)
 }
 
 export function createMarkdownExtensions() {
@@ -81,9 +98,11 @@ export function createMarkdownExtensions() {
     ParagraphPreserveBlankLines,
     Link.configure({
       openOnClick: false,
+      autolink: true,
+      linkOnPaste: true,
+      defaultProtocol: 'https',
       HTMLAttributes: {
         class: 'text-accent underline',
-        title: LINK_OPEN_HINT,
         rel: 'noopener noreferrer',
       },
     }),
@@ -94,6 +113,8 @@ export function createMarkdownExtensions() {
     }),
     Markdown.configure({
       html: false,
+      // Turn bare URLs in stored markdown into clickable <a> marks on load
+      linkify: true,
       transformPastedText: true,
       transformCopiedText: true,
     }),
