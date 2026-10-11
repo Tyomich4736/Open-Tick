@@ -1,11 +1,4 @@
 import { create } from 'zustand'
-import { useUiStore } from '@/stores/uiStore'
-
-function syncSelectedTaskId(selectedIds: string[]) {
-  useUiStore
-    .getState()
-    .setSelectedTaskId(selectedIds.length === 1 ? selectedIds[0]! : null)
-}
 
 interface TaskSelectionState {
   selectedIds: string[]
@@ -24,21 +17,22 @@ interface TaskSelectionState {
   isSelected: (id: string) => boolean
 }
 
+/** Single selected task id, or null when zero/many are selected. */
+export function selectSelectedTaskId(state: TaskSelectionState): string | null {
+  return state.selectedIds.length === 1 ? state.selectedIds[0]! : null
+}
+
 export const useTaskSelectionStore = create<TaskSelectionState>((set, get) => ({
   selectedIds: [],
   anchorId: null,
   pendingSelectId: null,
 
   selectOne: (id) => {
-    const selectedIds = [id]
-    set({ selectedIds, anchorId: id, pendingSelectId: null })
-    syncSelectedTaskId(selectedIds)
+    set({ selectedIds: [id], anchorId: id, pendingSelectId: null })
   },
 
   openTask: (id) => {
-    const selectedIds = [id]
-    set({ selectedIds, anchorId: id, pendingSelectId: id })
-    syncSelectedTaskId(selectedIds)
+    set({ selectedIds: [id], anchorId: id, pendingSelectId: id })
   },
 
   toggle: (id) => {
@@ -49,7 +43,6 @@ export const useTaskSelectionStore = create<TaskSelectionState>((set, get) => ({
       ? selectedIds[selectedIds.length - 1] ?? null
       : id
     set({ selectedIds, anchorId, pendingSelectId: null })
-    syncSelectedTaskId(selectedIds)
   },
 
   rangeTo: (id, orderedIds) => {
@@ -64,24 +57,19 @@ export const useTaskSelectionStore = create<TaskSelectionState>((set, get) => ({
     const [lo, hi] = start <= end ? [start, end] : [end, start]
     const next = orderedIds.slice(lo, hi + 1)
     set({ selectedIds: next, anchorId: startId, pendingSelectId: null })
-    syncSelectedTaskId(next)
   },
 
   clear: () => {
     set({ selectedIds: [], anchorId: null, pendingSelectId: null })
-    syncSelectedTaskId([])
   },
 
   onListFilterChange: () => {
     const pending = get().pendingSelectId
     if (pending) {
-      const selectedIds = [pending]
-      set({ selectedIds, anchorId: pending })
-      syncSelectedTaskId(selectedIds)
+      set({ selectedIds: [pending], anchorId: pending })
       return
     }
     set({ selectedIds: [], anchorId: null })
-    syncSelectedTaskId([])
   },
 
   setMany: (ids) => {
@@ -91,7 +79,6 @@ export const useTaskSelectionStore = create<TaskSelectionState>((set, get) => ({
       anchorId: selectedIds[selectedIds.length - 1] ?? null,
       pendingSelectId: null,
     })
-    syncSelectedTaskId(selectedIds)
   },
 
   isSelected: (id) => get().selectedIds.includes(id),

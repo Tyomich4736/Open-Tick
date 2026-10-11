@@ -10,8 +10,6 @@ export type ContextMenuState =
   | { type: 'task'; id: string; x: number; y: number }
 
 interface UiState {
-  selectedTaskId: string | null
-  setSelectedTaskId: (id: string | null) => void
   expandedTaskIds: Record<string, boolean>
   toggleExpanded: (id: string, currentlyExpanded: boolean) => void
   setTaskExpanded: (id: string, expanded: boolean) => void
@@ -36,8 +34,6 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  selectedTaskId: null,
-  setSelectedTaskId: (id) => set({ selectedTaskId: id }),
   expandedTaskIds: {},
   toggleExpanded: (id, currentlyExpanded) =>
     set((state) => ({

@@ -1,187 +1,19 @@
-import {
-  useMemo,
-  useRef,
-  useState,
-  type ComponentType,
-  type DragEvent,
-  type MouseEvent,
-} from 'react'
+import { useMemo } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { PanelLeftClose, PanelLeftOpen, Search, Settings } from 'lucide-react'
+import type { Project } from '@shared/entities'
 import {
-  AlertCircle,
-  CalendarDays,
-  CalendarRange,
-  CheckCircle2,
-  ChevronRight,
-  Folder,
-  Inbox,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Search,
-  Settings,
-  Sun,
-  Tag,
-} from 'lucide-react'
-import type { Project, ProjectFolder } from '@shared/entities'
-import {
-  useFolderExpanded,
-  useFolderMutations,
   useFolders,
   useNonInboxProjects,
   useProjects,
 } from '@/hooks/useProjects'
-import { useProjectMutations } from '@/hooks/useTaskMutations'
-import { useTags, useTaskCount } from '@/hooks/useTasks'
-import { Collapse } from '@/components/ui/Collapse'
-import { useUiStore } from '@/stores/uiStore'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ipc } from '@/lib/ipc-client'
-import { unwrapIpc } from '@/lib/ipcResult'
-import { queryKeys } from '@/lib/queryClient'
+import { useTags } from '@/hooks/useTasks'
+import { useSidebarSections } from '@/hooks/useSidebarSections'
+import { useSidebarDnD } from '@/hooks/useSidebarDnD'
 import { SidebarContextMenu } from './SidebarContextMenu'
-
-type SidebarSectionId = 'projects' | 'tags'
-
-const DEFAULT_SECTIONS: Record<SidebarSectionId, boolean> = {
-  projects: true,
-  tags: true,
-}
-
-function useSidebarSections() {
-  const queryClient = useQueryClient()
-  const query = useQuery({
-    queryKey: queryKeys.settings('sidebar_sections_expanded'),
-    queryFn: async () => {
-      const result = await ipc.settings.get<Partial<Record<SidebarSectionId, boolean>>>(
-        'sidebar_sections_expanded',
-      )
-      if (!result.ok) return { ...DEFAULT_SECTIONS }
-      return { ...DEFAULT_SECTIONS, ...(result.data ?? {}) }
-    },
-  })
-
-  const setSection = useMutation({
-    mutationFn: async (map: Record<SidebarSectionId, boolean>) => {
-      unwrapIpc(await ipc.settings.set('sidebar_sections_expanded', map))
-      return map
-    },
-    onSuccess: (map) => {
-      queryClient.setQueryData(queryKeys.settings('sidebar_sections_expanded'), map)
-    },
-  })
-
-  return {
-    sections: query.data ?? DEFAULT_SECTIONS,
-    toggleSection: (id: SidebarSectionId) => {
-      const current = query.data ?? DEFAULT_SECTIONS
-      setSection.mutate({ ...current, [id]: !current[id] })
-    },
-  }
-}
-
-function SectionHeader({
-  label,
-  expanded,
-  onToggle,
-}: {
-  label: string
-  expanded: boolean
-  onToggle: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="mb-1.5 flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-xs font-medium uppercase tracking-wide text-text-muted hover:bg-black/5 hover:text-text-primary dark:hover:bg-white/5"
-      aria-expanded={expanded}
-    >
-      <ChevronRight
-        className={[
-          'size-3.5 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none',
-          expanded ? 'rotate-90' : 'rotate-0',
-        ].join(' ')}
-      />
-      <span className="flex-1">{label}</span>
-    </button>
-  )
-}
-
-function SidebarItem({
-  to,
-  label,
-  icon: Icon,
-  badge,
-  color,
-  depth = 0,
-  collapsed,
-  draggable,
-  dropHighlight,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
-  onContextMenu,
-}: {
-  to: string
-  label: string
-  icon?: ComponentType<{ className?: string }>
-  badge?: number
-  color?: string
-  depth?: number
-  collapsed?: boolean
-  draggable?: boolean
-  dropHighlight?: boolean
-  onDragStart?: (e: DragEvent) => void
-  onDragOver?: (e: DragEvent) => void
-  onDragLeave?: (e: DragEvent) => void
-  onDrop?: (e: DragEvent) => void
-  onDragEnd?: (e: DragEvent) => void
-  onContextMenu?: (e: MouseEvent) => void
-}) {
-  return (
-    <NavLink
-      to={to}
-      title={collapsed ? label : undefined}
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      onContextMenu={onContextMenu}
-      style={{ paddingLeft: collapsed ? undefined : `${12 + depth * 14}px` }}
-      className={({ isActive }) =>
-        [
-          'flex items-center gap-2.5 rounded-lg py-2 text-sm transition-colors',
-          collapsed ? 'justify-center px-2' : 'px-3',
-          dropHighlight
-            ? 'bg-accent/15 ring-1 ring-inset ring-accent/40'
-            : isActive
-              ? 'bg-accent/10 font-medium text-accent'
-              : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/5',
-        ].join(' ')
-      }
-    >
-      {color ? (
-        <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      ) : (
-        Icon && <Icon className="size-4 shrink-0 opacity-70" />
-      )}
-      {!collapsed && <span className="flex-1 truncate">{label}</span>}
-      {!collapsed && badge !== undefined && badge > 0 && (
-        <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-xs font-medium text-accent">
-          {badge}
-        </span>
-      )}
-    </NavLink>
-  )
-}
-
-type DragPayload =
-  | { kind: 'project'; id: string }
-  | { kind: 'folder'; id: string }
+import { SidebarSmartLists } from './sidebar/SidebarSmartLists'
+import { SidebarProjects } from './sidebar/SidebarProjects'
+import { SidebarTags } from './sidebar/SidebarTags'
 
 export function Sidebar({
   collapsed = false,
@@ -192,25 +24,12 @@ export function Sidebar({
   onToggleCollapse?: () => void
   onOpenSearch?: () => void
 }) {
-  const openProjectModal = useUiStore((s) => s.openProjectModal)
-  const openFolderModal = useUiStore((s) => s.openFolderModal)
-  const setContextMenu = useUiStore((s) => s.setContextMenu)
   const { data: projects = [] } = useProjects()
   const { data: folders = [] } = useFolders()
   const { data: tags = [] } = useTags()
-  const { data: expandedMap = {} } = useFolderExpanded()
-  const { setExpanded, reorderFolders } = useFolderMutations()
-  const { reorderProjects } = useProjectMutations()
   const { sections, toggleSection } = useSidebarSections()
   const userProjects = useNonInboxProjects(projects)
-  const { data: todayCount = 0 } = useTaskCount({ smart_list: 'today', parent_id: null })
-  const { data: overdueCount = 0 } = useTaskCount({ smart_list: 'overdue', parent_id: null })
   const location = useLocation()
-  const dragRef = useRef<DragPayload | null>(null)
-  const [drag, setDrag] = useState<DragPayload | null>(null)
-  const [dropTarget, setDropTarget] = useState<
-    { kind: 'folder' | 'root' | 'project'; id: string } | null
-  >(null)
 
   const topLevelProjects = useMemo(
     () => userProjects.filter((p) => !p.folder_id).sort((a, b) => a.sort_order - b.sort_order),
@@ -235,245 +54,12 @@ export function Sidebar({
     return map
   }, [folders, userProjects])
 
-  const smartLists = [
-    { to: '/inbox', label: 'Inbox', icon: Inbox },
-    { to: '/today', label: 'Today', icon: Sun, badge: todayCount },
-    { to: '/tomorrow', label: 'Tomorrow', icon: CalendarDays },
-    { to: '/week', label: 'Next 7 Days', icon: CalendarRange },
-    {
-      to: '/overdue',
-      label: 'Overdue',
-      icon: AlertCircle,
-      badge: overdueCount,
-    },
-    { to: '/completed', label: 'Completed', icon: CheckCircle2 },
-  ] as const
-
-  function isExpanded(folderId: string): boolean {
-    return expandedMap[folderId] ?? true
-  }
-
-  function toggleFolder(folderId: string) {
-    setExpanded.mutate({ ...expandedMap, [folderId]: !isExpanded(folderId) })
-  }
-
-  function clearDrag() {
-    dragRef.current = null
-    setDrag(null)
-    setDropTarget(null)
-  }
-
-  function beginDrag(payload: DragPayload, e: DragEvent) {
-    dragRef.current = payload
-    setDrag(payload)
-    e.dataTransfer.setData('application/x-opentick-drag', JSON.stringify(payload))
-    e.dataTransfer.setData('text/plain', payload.id)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  function readDrag(): DragPayload | null {
-    return dragRef.current ?? drag
-  }
-
-  function onDropProjectOntoFolder(folderId: string | null) {
-    const payload = readDrag()
-    if (!payload || payload.kind !== 'project') return
-    const project = userProjects.find((p) => p.id === payload.id)
-    if (!project) return
-    const alreadyThere =
-      folderId === null ? project.folder_id == null : project.folder_id === folderId
-    if (alreadyThere) {
-      clearDrag()
-      return
-    }
-    const siblings =
-      folderId === null ? topLevelProjects : (projectsByFolder.get(folderId) ?? [])
-    const ordered = siblings.map((p) => p.id).filter((id) => id !== payload.id)
-    ordered.push(payload.id)
-    reorderProjects.mutate({ orderedIds: ordered, folderId })
-    clearDrag()
-  }
-
-  function onDropReorderFolder(targetId: string) {
-    const payload = readDrag()
-    if (!payload || payload.kind !== 'folder' || payload.id === targetId) return
-    const ids = folders.map((f) => f.id)
-    const from = ids.indexOf(payload.id)
-    const to = ids.indexOf(targetId)
-    if (from < 0 || to < 0) return
-    const next = [...ids]
-    next.splice(from, 1)
-    next.splice(to, 0, payload.id)
-    reorderFolders.mutate(next)
-    clearDrag()
-  }
-
-  function onDropReorderProject(target: Project, folderId: string | null) {
-    const payload = readDrag()
-    if (!payload || payload.kind !== 'project' || payload.id === target.id) return
-    const siblings =
-      folderId === null
-        ? topLevelProjects
-        : (projectsByFolder.get(folderId) ?? [])
-    const ids = siblings.map((p) => p.id)
-    const from = ids.indexOf(payload.id)
-    const to = ids.indexOf(target.id)
-    if (from < 0 || to < 0) {
-      const ordered = [...ids]
-      ordered.splice(to < 0 ? 0 : to, 0, payload.id)
-      reorderProjects.mutate({ orderedIds: ordered, folderId })
-      clearDrag()
-      return
-    }
-    const next = [...ids]
-    next.splice(from, 1)
-    next.splice(to, 0, payload.id)
-    reorderProjects.mutate({ orderedIds: next, folderId })
-    clearDrag()
-  }
-
-  function allowProjectDrop(e: DragEvent) {
-    const payload = readDrag()
-    if (!payload || payload.kind !== 'project') return false
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    return true
-  }
-
-  function renderProject(project: Project, depth: number, folderId: string | null) {
-    const highlight =
-      dropTarget?.kind === 'project' &&
-      dropTarget.id === project.id &&
-      drag?.kind === 'project' &&
-      drag.id !== project.id
-
-    return (
-      <li key={project.id}>
-        <SidebarItem
-          to={`/project/${project.id}`}
-          label={project.name}
-          color={project.color}
-          depth={depth}
-          collapsed={collapsed}
-          draggable={!collapsed}
-          dropHighlight={Boolean(highlight)}
-          onDragStart={(e) => beginDrag({ kind: 'project', id: project.id }, e)}
-          onDragEnd={clearDrag}
-          onDragOver={(e) => {
-            if (!allowProjectDrop(e)) return
-            e.stopPropagation()
-            setDropTarget({ kind: 'project', id: project.id })
-          }}
-          onDragLeave={() => {
-            setDropTarget((current) =>
-              current?.kind === 'project' && current.id === project.id ? null : current,
-            )
-          }}
-          onDrop={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onDropReorderProject(project, folderId)
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            setContextMenu({ type: 'project', id: project.id, x: e.clientX, y: e.clientY })
-          }}
-        />
-      </li>
-    )
-  }
-
-  function renderFolder(folder: ProjectFolder) {
-    const expanded = isExpanded(folder.id)
-    const children = projectsByFolder.get(folder.id) ?? []
-    const folderDropActive =
-      dropTarget?.kind === 'folder' &&
-      dropTarget.id === folder.id &&
-      drag?.kind === 'project'
-
-    return (
-      <li key={folder.id}>
-        <div
-          draggable
-          onDragStart={(e) => beginDrag({ kind: 'folder', id: folder.id }, e)}
-          onDragEnd={clearDrag}
-          onDragOver={(e) => {
-            const payload = readDrag()
-            if (!payload) return
-            e.preventDefault()
-            e.stopPropagation()
-            e.dataTransfer.dropEffect = 'move'
-            if (payload.kind === 'project') {
-              setDropTarget({ kind: 'folder', id: folder.id })
-            }
-          }}
-          onDragLeave={() => {
-            setDropTarget((current) =>
-              current?.kind === 'folder' && current.id === folder.id ? null : current,
-            )
-          }}
-          onDrop={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            const payload = readDrag()
-            if (payload?.kind === 'folder') onDropReorderFolder(folder.id)
-            else onDropProjectOntoFolder(folder.id)
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            setContextMenu({ type: 'folder', id: folder.id, x: e.clientX, y: e.clientY })
-          }}
-          className={[
-            'group relative flex items-center gap-1 rounded-lg px-1 py-0.5 hover:bg-black/5 dark:hover:bg-white/5',
-            folderDropActive ? 'bg-accent/15 ring-1 ring-inset ring-accent/40' : '',
-          ].join(' ')}
-        >
-          <button
-            type="button"
-            onClick={() => toggleFolder(folder.id)}
-            className="rounded p-1 text-text-muted"
-            aria-label={expanded ? 'Collapse folder' : 'Expand folder'}
-          >
-            <ChevronRight
-              className={[
-                'size-4 transition-transform duration-200 ease-out motion-reduce:transition-none',
-                expanded ? 'rotate-90' : 'rotate-0',
-              ].join(' ')}
-            />
-          </button>
-          <button
-            type="button"
-            onDoubleClick={() => openFolderModal(folder.id)}
-            className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-3 text-left text-sm text-text-primary"
-          >
-            <Folder className="size-4 shrink-0 opacity-70" />
-            <span className="truncate font-medium">{folder.name}</span>
-            <span className="text-xs text-text-muted">{children.length}</span>
-          </button>
-        </div>
-        <Collapse open={expanded}>
-          <ul
-            className={[
-              'min-h-2 space-y-0.5 rounded-lg',
-              folderDropActive ? 'bg-accent/5' : '',
-            ].join(' ')}
-            onDragOver={(e) => {
-              if (!allowProjectDrop(e)) return
-              e.stopPropagation()
-              setDropTarget({ kind: 'folder', id: folder.id })
-            }}
-            onDrop={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              onDropProjectOntoFolder(folder.id)
-            }}
-          >
-            {children.map((project) => renderProject(project, 1, folder.id))}
-          </ul>
-        </Collapse>
-      </li>
-    )
-  }
+  const dnd = useSidebarDnD({
+    userProjects,
+    folders,
+    topLevelProjects,
+    projectsByFolder,
+  })
 
   return (
     <aside className="flex h-full w-full flex-col border-r border-border bg-bg-sidebar">
@@ -502,111 +88,24 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        {!collapsed && (
-          <p className="mb-1.5 px-3 text-xs font-medium uppercase tracking-wide text-text-muted">
-            Smart lists
-          </p>
-        )}
-        <ul className="space-y-0.5">
-          {smartLists.map((item) => (
-            <li key={item.to}>
-              <SidebarItem
-                {...item}
-                collapsed={collapsed}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  setContextMenu({
-                    type: 'smart',
-                    path: item.to,
-                    label: item.label,
-                    x: e.clientX,
-                    y: e.clientY,
-                  })
-                }}
-              />
-            </li>
-          ))}
-        </ul>
+        <SidebarSmartLists collapsed={collapsed} />
 
         {!collapsed && (
           <>
-            <div className="mt-5">
-              <SectionHeader
-                label="Lists"
-                expanded={sections.projects}
-                onToggle={() => toggleSection('projects')}
-              />
-              <Collapse open={sections.projects}>
-                <ul
-                  className={[
-                    'min-h-2 space-y-0.5 rounded-lg',
-                    dropTarget?.kind === 'root' && drag?.kind === 'project'
-                      ? 'bg-accent/5 ring-1 ring-inset ring-accent/30'
-                      : '',
-                  ].join(' ')}
-                  onDragOver={(e) => {
-                    if (!allowProjectDrop(e)) return
-                    setDropTarget({ kind: 'root', id: 'root' })
-                  }}
-                  onDragLeave={(e) => {
-                    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-                    setDropTarget((current) => (current?.kind === 'root' ? null : current))
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    if (readDrag()?.kind === 'project') onDropProjectOntoFolder(null)
-                  }}
-                >
-                  {folders.map((folder) => renderFolder(folder))}
-                  {topLevelProjects.map((project) => renderProject(project, 0, null))}
-                </ul>
-
-                <div className="mt-2 space-y-0.5">
-                  <button
-                    type="button"
-                    onClick={() => openProjectModal()}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-black/5 hover:text-text-primary dark:hover:bg-white/5"
-                  >
-                    <Plus className="size-4" />
-                    New List
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openFolderModal()}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-black/5 hover:text-text-primary dark:hover:bg-white/5"
-                  >
-                    <Folder className="size-4" />
-                    New Folder
-                  </button>
-                </div>
-              </Collapse>
-            </div>
-
-            <div className="mt-5">
-              <SectionHeader
-                label="Tags"
-                expanded={sections.tags}
-                onToggle={() => toggleSection('tags')}
-              />
-              <Collapse open={sections.tags}>
-                <ul className="space-y-0.5">
-                  {tags.length === 0 ? (
-                    <li className="px-3 py-2 text-sm text-text-muted">No tags yet</li>
-                  ) : (
-                    tags.map((tag) => (
-                      <li key={tag.id}>
-                        <SidebarItem
-                          to={`/tag/${encodeURIComponent(tag.name)}`}
-                          label={tag.name}
-                          icon={Tag}
-                        />
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </Collapse>
-            </div>
+            <SidebarProjects
+              collapsed={collapsed}
+              folders={folders}
+              topLevelProjects={topLevelProjects}
+              projectsByFolder={projectsByFolder}
+              projectsExpanded={sections.projects}
+              onToggleProjectsSection={() => toggleSection('projects')}
+              dnd={dnd}
+            />
+            <SidebarTags
+              tags={tags}
+              tagsExpanded={sections.tags}
+              onToggleTagsSection={() => toggleSection('tags')}
+            />
           </>
         )}
       </nav>

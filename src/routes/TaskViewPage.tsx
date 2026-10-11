@@ -7,7 +7,10 @@ import { useProjects, useInboxProject } from '@/hooks/useProjects'
 import { useListPreferences } from '@/hooks/useListPreferences'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
 import { useUiStore } from '@/stores/uiStore'
-import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
+import {
+  selectSelectedTaskId,
+  useTaskSelectionStore,
+} from '@/stores/taskSelectionStore'
 import { ipc } from '@/lib/ipc-client'
 import { QuickAdd } from '@/components/tasks/QuickAdd'
 import { ShowCompletedToggle, SortPicker } from '@/components/tasks/SortPicker'
@@ -49,9 +52,9 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
   const { data: projects } = useProjects()
   const inbox = useInboxProject(projects)
   const { createTask, deleteTask, bulkDelete } = useTaskMutations()
-  const selectedTaskId = useUiStore((s) => s.selectedTaskId)
   const focusQuickAdd = useUiStore((s) => s.focusQuickAdd)
   const selectedIds = useTaskSelectionStore((s) => s.selectedIds)
+  const selectedTaskId = useTaskSelectionStore(selectSelectedTaskId)
   const clearSelection = useTaskSelectionStore((s) => s.clear)
 
   const defaultProjectId = view.kind === 'project' ? view.projectId : inbox?.id

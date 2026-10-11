@@ -1,14 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import {
-  addDays,
-  addMonths,
-  addWeeks,
-  eachDayOfInterval,
-  format,
-  subDays,
-  subMonths,
-  subWeeks,
-} from 'date-fns'
+import { eachDayOfInterval } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { ViewModeSwitcher } from '@/components/calendar/ViewModeSwitcher'
 import { CalendarMonth } from '@/components/calendar/CalendarMonth'
@@ -24,14 +15,12 @@ import { useTaskMutations } from '@/hooks/useTaskMutations'
 import { useWeekStartsOn } from '@/hooks/useWeekStartsOn'
 import { useCalendarShowAllRecurrence } from '@/hooks/useCalendarShowAllRecurrence'
 import { useCalendarShowCompleted } from '@/hooks/useCalendarShowCompleted'
+import { multiDayRange, weekRange } from '@/lib/calendarUtils'
 import {
-  agendaRange,
-  dayRange,
-  monthGridRange,
-  multiDayRange,
-  rangeToFilterIso,
-  weekRange,
-} from '@/lib/calendarUtils'
+  filterRangeForMode,
+  shiftCursor,
+  titleForMode,
+} from '@/lib/calendarModeStrategy'
 import { expandTasksForCalendarRange } from '@shared/expandRecurrence'
 import {
   useCalendarStore,
@@ -66,26 +55,10 @@ export function CalendarPage() {
 
   const cursor = useMemo(() => parseCursorDate(cursorDate), [cursorDate])
 
-  const filterRange = useMemo(() => {
-    if (mode === 'month') {
-      const { start, end } = monthGridRange(cursor, weekStartsOn)
-      return { ...rangeToFilterIso(start, end), start, end }
-    }
-    if (mode === 'week') {
-      const { start, end } = weekRange(cursor, weekStartsOn)
-      return { ...rangeToFilterIso(start, end), start, end }
-    }
-    if (mode === 'days') {
-      const { start, end } = multiDayRange(cursor, daysCount)
-      return { ...rangeToFilterIso(start, end), start, end }
-    }
-    if (mode === 'day') {
-      const { start, end } = dayRange(cursor)
-      return { ...rangeToFilterIso(start, end), start, end }
-    }
-    const { start, end } = agendaRange(cursor, 30)
-    return { ...rangeToFilterIso(start, end), start, end }
-  }, [mode, cursor, weekStartsOn, daysCount])
+  const filterRange = useMemo(
+    () => filterRangeForMode(mode, cursor, weekStartsOn, daysCount),
+    [mode, cursor, weekStartsOn, daysCount],
+  )
 
   const { data: rawTasks = [], isLoading } = useTasks({
     due_from: filterRange.due_from,
@@ -111,36 +84,13 @@ export function CalendarPage() {
     return eachDayOfInterval({ start, end })
   }, [cursor, daysCount])
 
-  const title = useMemo(() => {
-    if (mode === 'month') return format(cursor, 'MMMM yyyy')
-    if (mode === 'week') {
-      const { start, end } = weekRange(cursor, weekStartsOn)
-      return `${format(start, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`
-    }
-    if (mode === 'days') {
-      const { start, end } = multiDayRange(cursor, daysCount)
-      return `${format(start, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`
-    }
-    if (mode === 'day') return format(cursor, 'EEEE, MMMM d, yyyy')
-    return 'Agenda'
-  }, [mode, cursor, weekStartsOn, daysCount])
+  const title = useMemo(
+    () => titleForMode(mode, cursor, weekStartsOn, daysCount),
+    [mode, cursor, weekStartsOn, daysCount],
+  )
 
-  const goPrev = () => {
-    if (mode === 'month') setCursorDate(subMonths(cursor, 1))
-    else if (mode === 'week') setCursorDate(subWeeks(cursor, 1))
-    else if (mode === 'days') setCursorDate(subDays(cursor, daysCount))
-    else if (mode === 'day') setCursorDate(subDays(cursor, 1))
-    else setCursorDate(subDays(cursor, 7))
-  }
-
-  const goNext = () => {
-    if (mode === 'month') setCursorDate(addMonths(cursor, 1))
-    else if (mode === 'week') setCursorDate(addWeeks(cursor, 1))
-    else if (mode === 'days') setCursorDate(addDays(cursor, daysCount))
-    else if (mode === 'day') setCursorDate(addDays(cursor, 1))
-    else setCursorDate(addDays(cursor, 7))
-  }
-
+  const goPrev = () => setCursorDate(shiftCursor(mode, cursor, daysCount, -1))
+  const goNext = () => setCursorDate(shiftCursor(mode, cursor, daysCount, 1))
   const goToday = () => setCursorDate(new Date())
 
   const onCreateRange = useCallback(

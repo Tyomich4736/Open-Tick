@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useFolders, useProjects } from '@/hooks/useProjects'
 import { useLayoutSettings } from '@/hooks/useLayoutSettings'
+import { useAppShellDesktopEffects } from '@/hooks/useAppShellDesktopEffects'
 import { useUiStore } from '@/stores/uiStore'
 import { useCalendarStore } from '@/stores/calendarStore'
+import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
 import { Sidebar } from './Sidebar'
 import { StatusBar } from './StatusBar'
 import { ResizeHandle } from './ResizeHandle'
@@ -17,9 +19,6 @@ import { TaskContextMenu } from '@/components/tasks/TaskContextMenu'
 import { BulkTaskContextMenu } from '@/components/tasks/BulkTaskContextMenu'
 import { CommandPalette } from '@/components/CommandPalette'
 import { IntegrationPanel } from '@/components/sync/IntegrationPanel'
-import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
-import { ipc } from '@/lib/ipc-client'
-import { useToastStore } from '@/stores/toastStore'
 
 function DetailColumn() {
   const selectedIds = useTaskSelectionStore((s) => s.selectedIds)
@@ -29,7 +28,6 @@ function DetailColumn() {
 
 export function AppShell() {
   const location = useLocation()
-  const navigate = useNavigate()
   const { data: projects = [] } = useProjects()
   const { data: folders = [] } = useFolders()
   const editingProjectId = useUiStore((s) => s.editingProjectId)
@@ -39,7 +37,7 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const [resizingDetail, setResizingDetail] = useState(false)
-  const setIntegrationOpen = useUiStore((s) => s.setIntegrationPanelOpen)
+  const togglePalette = useCallback(() => setPaletteOpen((open) => !open), [])
 
   const {
     ready,
@@ -60,76 +58,11 @@ export function AppShell() {
   const isSticky = location.pathname.startsWith('/sticky')
   const showDetailPanel = !isSettings && !isCalendar
 
+  useAppShellDesktopEffects(togglePalette)
+
   useEffect(() => {
     if (!isCalendar) useCalendarStore.getState().closeTaskPopup()
   }, [isCalendar])
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setPaletteOpen((open) => !open)
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        setIntegrationOpen(true)
-        void ipc.sync.now().then((result) => {
-          if (!result.ok) useToastStore.getState().addToast(result.error.message, 'error')
-        })
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [setIntegrationOpen])
-
-  useEffect(() => {
-    const unsubFocus = ipc.onTaskFocus(({ taskId }) => {
-      useTaskSelectionStore.getState().selectOne(taskId)
-      void (async () => {
-        const result = await ipc.tasks.get(taskId)
-        if (result.ok) {
-          navigate(`/project/${result.data.project_id}`)
-        } else {
-          navigate('/inbox')
-        }
-      })()
-    })
-    const unsubSticky = ipc.onDesktopNewSticky(() => {
-      void (async () => {
-        const selected = useTaskSelectionStore.getState().selectedIds[0]
-        if (selected) {
-          const result = await ipc.stickies.open(selected)
-          if (!result.ok) useToastStore.getState().addToast(result.error.message, 'error')
-          return
-        }
-        const projectList = await ipc.projects.list()
-        if (!projectList.ok) {
-          useToastStore.getState().addToast(projectList.error.message, 'error')
-          return
-        }
-        const inbox = projectList.data.find((p) => p.is_inbox)
-        if (!inbox) return
-        const created = await ipc.tasks.create({
-          title: 'New sticky note',
-          project_id: inbox.id,
-        })
-        if (!created.ok) {
-          useToastStore.getState().addToast(created.error.message, 'error')
-          return
-        }
-        const sticky = await ipc.stickies.open(created.data.id)
-        if (!sticky.ok) useToastStore.getState().addToast(sticky.error.message, 'error')
-      })()
-    })
-    const unsubToast = ipc.onDesktopToast(({ message, type }) => {
-      useToastStore.getState().addToast(message, type === 'error' ? 'error' : 'info')
-    })
-    return () => {
-      unsubFocus()
-      unsubSticky()
-      unsubToast()
-    }
-  }, [navigate])
 
   if (isTaskWindow || isSticky) {
     return (
