@@ -10,6 +10,8 @@ import {
 import type { TimeFormat } from '@/hooks/useTimeFormat'
 import { getWeekStartsOn } from '@/hooks/useWeekStartsOn'
 
+export { applyDueDaysFromNow, type DueScheduleFields } from '@shared/dueSchedule'
+
 function timePattern(timeFormat: TimeFormat): string {
   return timeFormat === '24h' ? 'HH:mm' : 'h:mm a'
 }

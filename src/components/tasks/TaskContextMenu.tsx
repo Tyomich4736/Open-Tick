@@ -1,8 +1,8 @@
-import { addDays, formatISO, startOfDay } from 'date-fns'
 import type { Priority } from '@shared/entities'
 import { useProjects } from '@/hooks/useProjects'
 import { useTags, useTaskDetail } from '@/hooks/useTasks'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
+import { applyDueDaysFromNow } from '@shared/dueSchedule'
 import { ipc } from '@/lib/ipc-client'
 import { useToastStore } from '@/stores/toastStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -40,16 +40,16 @@ export function TaskContextMenu() {
     <TaskActionMenuShell open x={menu.x} y={menu.y}>
       {({ submenu, openSub, scheduleCloseSub, openLeft, close }) => {
         function setDue(daysFromNow: number | null) {
-          const due =
-            daysFromNow === null
-              ? null
-              : formatISO(addDays(startOfDay(new Date()), daysFromNow))
           updateTask.mutate({
             id: current.id,
-            input: {
-              due_date: due,
-              is_all_day: daysFromNow !== null ? true : current.is_all_day,
-            },
+            input: applyDueDaysFromNow(
+              {
+                due_date: current.due_date,
+                start_date: current.start_date,
+                is_all_day: current.is_all_day,
+              },
+              daysFromNow,
+            ),
           })
           close()
         }

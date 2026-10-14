@@ -1,8 +1,9 @@
-import { addDays, formatISO, startOfDay } from 'date-fns'
 import type { Priority } from '@shared/entities'
 import { useProjects } from '@/hooks/useProjects'
 import { useTags } from '@/hooks/useTasks'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
+import { applyDueDaysFromNow } from '@shared/dueSchedule'
+import { ipc } from '@/lib/ipc-client'
 import { useUiStore } from '@/stores/uiStore'
 import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
 import { useSelectedTaskStatuses } from '@/components/tasks/TaskPanelMultiSelect'
@@ -40,18 +41,27 @@ export function BulkTaskContextMenu() {
     >
       {({ submenu, openSub, scheduleCloseSub, openLeft, close }) => {
         function setDue(daysFromNow: number | null) {
-          const due =
-            daysFromNow === null
-              ? null
-              : formatISO(addDays(startOfDay(new Date()), daysFromNow))
-          bulkUpdate.mutate({
-            ids,
-            patch: {
-              due_date: due,
-              is_all_day: daysFromNow !== null ? true : undefined,
-            },
-          })
           close()
+          void (async () => {
+            await Promise.all(
+              ids.map(async (id) => {
+                const result = await ipc.tasks.get(id)
+                if (!result.ok || !result.data) return
+                const task = result.data
+                await ipc.tasks.update(
+                  id,
+                  applyDueDaysFromNow(
+                    {
+                      due_date: task.due_date,
+                      start_date: task.start_date,
+                      is_all_day: task.is_all_day,
+                    },
+                    daysFromNow,
+                  ),
+                )
+              }),
+            )
+          })()
         }
 
         return (
