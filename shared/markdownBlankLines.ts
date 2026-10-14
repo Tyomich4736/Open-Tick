@@ -5,6 +5,9 @@ export const BLANK_LINE_MARKER = '\u00a0'
  * Turn blank-line gaps into explicit NBSP paragraphs so they survive markdown parse.
  * Idempotent for content that already uses {@link BLANK_LINE_MARKER}.
  *
+ * Single `\n` soft breaks are left alone — TipTap markdown uses `breaks: true` so TickTick
+ * plain-text newlines still render as line breaks.
+ *
  * @example
  * preserveMarkdownBlankLines('a\\n\\nb') // 'a\\n\\n\\u00a0\\n\\nb'
  */
@@ -39,4 +42,20 @@ export function preserveMarkdownBlankLines(markdown: string): string {
   }
 
   return out.join('\n\n')
+}
+
+/**
+ * Strip NBSP blank-line markers before sending content to TickTick (plain newlines).
+ */
+export function restoreMarkdownBlankLines(markdown: string): string {
+  if (!markdown) return markdown
+
+  return markdown
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) =>
+      line === BLANK_LINE_MARKER || line.trim() === BLANK_LINE_MARKER ? '' : line,
+    )
+    .join('\n')
 }
