@@ -1,5 +1,5 @@
 import type { ComponentType, DragEvent, MouseEvent } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 
 export function SectionHeader({
@@ -62,11 +62,20 @@ export function SidebarItem({
   onDragEnd?: (e: DragEvent) => void
   onContextMenu?: (e: MouseEvent) => void
 }) {
+  const navigate = useNavigate()
+
   return (
     <NavLink
       to={to}
       title={collapsed ? label : undefined}
       draggable={draggable}
+      onClick={(e) => {
+        // Keep modified clicks in-app (don't open a new Electron/browser window)
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+          e.preventDefault()
+          void navigate(to)
+        }
+      }}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}

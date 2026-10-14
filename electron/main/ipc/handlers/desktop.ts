@@ -100,7 +100,11 @@ export function createMainWindow(): BrowserWindow {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Only open real external links (markdown, OAuth, etc.). In-app hash
+    // navigations from Ctrl/Cmd+click on <a href="#/..."> must stay inside Electron.
+    if (/^https?:\/\//i.test(details.url)) {
+      void shell.openExternal(details.url)
+    }
     return { action: 'deny' }
   })
 

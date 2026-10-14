@@ -39,7 +39,6 @@ export function TaskList({
   const selectOne = useTaskSelectionStore((s) => s.selectOne)
   const toggleSelect = useTaskSelectionStore((s) => s.toggle)
   const rangeTo = useTaskSelectionStore((s) => s.rangeTo)
-  const clearSelection = useTaskSelectionStore((s) => s.clear)
   const toggleExpanded = useUiStore((s) => s.toggleExpanded)
   const setContextMenu = useUiStore((s) => s.setContextMenu)
   const { density } = useListDensity()
@@ -225,9 +224,6 @@ export function TaskList({
     <div
       ref={listRef}
       className="min-h-full"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) clearSelection()
-      }}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
           dnd.setDropIndicator(null)

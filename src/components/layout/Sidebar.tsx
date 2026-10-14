@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen, Search, Settings } from 'lucide-react'
 import type { Project } from '@shared/entities'
 import {
@@ -30,6 +30,7 @@ export function Sidebar({
   const { sections, toggleSection } = useSidebarSections()
   const userProjects = useNonInboxProjects(projects)
   const location = useLocation()
+  const navigate = useNavigate()
 
   const topLevelProjects = useMemo(
     () => userProjects.filter((p) => !p.folder_id).sort((a, b) => a.sort_order - b.sort_order),
@@ -127,6 +128,12 @@ export function Sidebar({
         <NavLink
           to="/settings"
           title={collapsed ? 'Settings' : undefined}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+              e.preventDefault()
+              void navigate('/settings')
+            }
+          }}
           className={({ isActive }) =>
             [
               'flex items-center gap-2.5 rounded-lg py-2 text-sm transition-colors',
