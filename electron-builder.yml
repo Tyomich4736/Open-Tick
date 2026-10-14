@@ -56,6 +56,8 @@ asarUnpack:
   - '**/node_modules/better-sqlite3/**'
   - '**/node_modules/bindings/**'
   - '**/node_modules/file-uri-to-path/**'
+# Maximum helps NSIS/DMG size. Do NOT let AppImage inherit it — xz makes
+# FUSE mounts crawl (tens of seconds before the window appears).
 compression: maximum
 beforePack: scripts/beforePack.cjs
 win:
@@ -76,6 +78,18 @@ mac:
   category: public.app-category.productivity
 linux:
   icon: icon.png
+  # Avoid spaces in the binary / .desktop Exec path
+  executableName: open-tick
+  syncDesktopName: true
+  # AppImage FUSE cannot host a working chrome-sandbox; keep --no-sandbox.
+  # Also force X11 — Wayland ozone often freezes Electron UI.
+  executableArgs:
+    - --no-sandbox
+    - --ozone-platform-hint=x11
+  desktop:
+    # electron-builder 26+: Desktop Entry keys go under `entry`
+    entry:
+      StartupWMClass: open-tick
   target:
     - target: AppImage
       arch:
@@ -83,8 +97,12 @@ linux:
     - target: deb
       arch:
         - x64
-  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  artifactName: ${name}-${version}-linux-${arch}.${ext}
   category: Utility
+appImage:
+  # FUSE2 toolset ignores zstd and falls back to root `maximum` → xz (very slow).
+  # gzip is honored and mounts quickly.
+  compression: gzip
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

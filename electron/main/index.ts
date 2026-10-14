@@ -18,7 +18,33 @@ import { startReminderScheduler, stopReminderScheduler } from './notifications/r
 const APP_ID = 'com.opentick.app'
 const APP_DISPLAY_NAME = 'Open Tick'
 
-app.setName(APP_DISPLAY_NAME)
+/**
+ * Linux/Wayland: Electron often paints a blank window that then stops responding
+ * (AppImage + Mutter/KWin are especially bad). Prefer X11 unless the user already
+ * chose an ozone platform on the command line.
+ * Must run before app.ready / BrowserWindow creation.
+ */
+if (process.platform === 'linux') {
+  const hasOzone = process.argv.some(
+    (arg) =>
+      arg === '--ozone-platform' ||
+      arg.startsWith('--ozone-platform=') ||
+      arg === '--ozone-platform-hint' ||
+      arg.startsWith('--ozone-platform-hint='),
+  )
+  if (!hasOzone) {
+    app.commandLine.appendSwitch('ozone-platform-hint', 'x11')
+  }
+  // AppImage FUSE mounts break Chromium's GPU sandbox on many distros.
+  if (process.env.APPIMAGE || process.env.APPDIR) {
+    app.commandLine.appendSwitch('no-sandbox')
+    app.commandLine.appendSwitch('disable-gpu-sandbox')
+  }
+}
+
+// Linux WM_CLASS / .desktop association must match `desktopName` (open-tick).
+// Window title stays "Open Tick" via BrowserWindow.
+app.setName(process.platform === 'linux' ? 'open-tick' : APP_DISPLAY_NAME)
 if (process.platform === 'win32') {
   app.setAppUserModelId(APP_ID)
 }
@@ -72,10 +98,18 @@ async function startApp(): Promise<void> {
   }
 
   try {
+    logStartup('Creating main window')
     createMainWindow()
-    createAppTray()
-    applyDesktopSettings()
-    startReminderScheduler()
+    // Tray StatusNotifier registration can stall some Linux DEs; don't block first paint.
+    setImmediate(() => {
+      try {
+        createAppTray()
+        applyDesktopSettings()
+        startReminderScheduler()
+      } catch (err) {
+        logStartup('Desktop chrome init failed', err)
+      }
+    })
     setTimeout(() => {
       try {
         restoreStickyWindows()
@@ -83,6 +117,7 @@ async function startApp(): Promise<void> {
         logStartup('restoreStickyWindows failed', err)
       }
     }, 500)
+    logStartup('Main window created')
   } catch (err) {
     logStartup('Fatal while creating window', err)
     dialog.showErrorBox(

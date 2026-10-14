@@ -51,15 +51,17 @@ export function createMainWindow(): BrowserWindow {
     console.error('[window] loadMainWindowState failed, using defaults', err)
   }
 
+  // Windows: show immediately (ready-to-show alone left zombies when load stalled).
+  // Linux: wait for first paint — showing a blank AppImage/Wayland window looks frozen.
+  const showImmediately = process.platform === 'win32'
+
   const mainWindow = new BrowserWindow({
     width: bounds?.width ?? DEFAULT_BOUNDS.width,
     height: bounds?.height ?? DEFAULT_BOUNDS.height,
     ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
     minWidth: 900,
     minHeight: 600,
-    // Show immediately on Windows — waiting only on ready-to-show left zombie processes
-    // when DB/native init or load stalled.
-    show: true,
+    show: showImmediately,
     autoHideMenuBar: true,
     title: 'Open Tick',
     icon: appIconPath(),
@@ -73,7 +75,19 @@ export function createMainWindow(): BrowserWindow {
 
   if (!bounds) mainWindow.center()
   if (maximized) mainWindow.maximize()
-  mainWindow.focus()
+  if (showImmediately) mainWindow.focus()
+
+  if (!showImmediately) {
+    let revealed = false
+    const reveal = () => {
+      if (revealed || mainWindow.isDestroyed()) return
+      revealed = true
+      revealMainWindow(mainWindow)
+    }
+    mainWindow.once('ready-to-show', reveal)
+    // FUSE/AppImage loads can stall; never leave a hidden process with no window.
+    setTimeout(reveal, 8000)
+  }
 
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     console.error('[window] failed to load', { code, desc, url, html: rendererHtmlPath() })
