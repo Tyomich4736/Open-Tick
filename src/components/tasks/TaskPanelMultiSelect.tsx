@@ -55,7 +55,7 @@ export function TaskPanelMultiSelect() {
             {shown.map((t) => (
               <li
                 key={t.id}
-                className="truncate rounded-md bg-bg-primary px-2.5 py-1.5 text-xs text-text-muted"
+                className="task-title truncate rounded-md bg-bg-primary px-2.5 py-1.5 text-xs text-text-muted"
               >
                 {t.title}
               </li>

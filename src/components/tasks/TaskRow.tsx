@@ -129,7 +129,7 @@ export const TaskRow = memo(function TaskRow({
 
       <span
         className={[
-          'min-w-0 flex-1 truncate text-left text-[15px] font-medium leading-snug',
+          'task-title min-w-0 flex-1 truncate text-left text-[15px] font-medium leading-snug',
           completed ? 'text-text-muted line-through' : titleColor ? '' : 'text-text-primary',
         ].join(' ')}
         style={titleColor ? { color: titleColor } : undefined}

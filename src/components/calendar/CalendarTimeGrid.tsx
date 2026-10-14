@@ -162,7 +162,7 @@ export function CalendarTimeGrid({
                     }}
                     onContextMenu={(e) => openTaskContextMenu(e, task.id)}
                     className={[
-                      'truncate rounded px-1 py-0.5 text-left text-[10px]',
+                      'task-title truncate rounded px-1 py-0.5 text-left text-[10px]',
                       task.status === 'completed'
                         ? 'text-text-muted line-through opacity-70'
                         : 'text-text-primary',
@@ -288,7 +288,7 @@ export function CalendarTimeGrid({
                 >
                   <span
                     className={[
-                      'min-h-0 w-full overflow-hidden font-medium break-words',
+                      'task-title min-h-0 w-full overflow-hidden font-medium break-words',
                       item.task.status === 'completed' ? 'line-through' : '',
                     ].join(' ')}
                     style={{

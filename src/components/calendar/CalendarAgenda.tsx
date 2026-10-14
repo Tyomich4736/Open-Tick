@@ -65,7 +65,7 @@ export function CalendarAgenda({ cursor, tasks, days = 30 }: CalendarAgendaProps
                         />
                         <span
                           className={[
-                            'min-w-0 flex-1 truncate text-sm',
+                            'task-title min-w-0 flex-1 truncate text-sm',
                             task.status === 'completed'
                               ? 'text-text-muted line-through'
                               : 'text-text-primary',

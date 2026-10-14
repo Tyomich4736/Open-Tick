@@ -30,6 +30,21 @@ body {
   color: var(--color-text-primary);
   background-color: var(--color-bg-primary);
   -webkit-font-smoothing: antialiased;
+  /* Desktop-app feel: chrome is not selectable; forms & task titles opt back in */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not(
+    [type='radio']
+  ):not([type='range']):not([type='color']):not([type='file']),
+textarea,
+select,
+[contenteditable='true'],
+.ProseMirror,
+.task-title {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 * {

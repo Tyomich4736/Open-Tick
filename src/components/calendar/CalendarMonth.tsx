@@ -82,7 +82,7 @@ export function CalendarMonth({ cursor, tasks, weekStartsOn }: CalendarMonthProp
                     }}
                     onContextMenu={(e) => openTaskContextMenu(e, task.id)}
                     className={[
-                      'truncate rounded px-1 text-[10px] leading-4',
+                      'task-title truncate rounded px-1 text-[10px] leading-4',
                       task.status === 'completed'
                         ? 'text-text-muted line-through opacity-70'
                         : 'text-text-primary',
