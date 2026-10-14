@@ -113,8 +113,6 @@ export function createMarkdownExtensions() {
     }),
     Markdown.configure({
       html: false,
-      // TickTick descriptions use plain `\n` soft breaks; without this they collapse in CommonMark.
-      breaks: true,
       // Turn bare URLs in stored markdown into clickable <a> marks on load
       linkify: true,
       transformPastedText: true,

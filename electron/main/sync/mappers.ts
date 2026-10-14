@@ -1,8 +1,5 @@
 import type { Priority, ProjectViewMode } from '@shared/entities'
-import {
-  preserveMarkdownBlankLines,
-  restoreMarkdownBlankLines,
-} from '@shared/markdownBlankLines'
+import { preserveMarkdownBlankLines } from '@shared/markdownBlankLines'
 import type { RecurrenceRule, ReminderInput } from '@shared/recurrence'
 import { normalizeAllDayInstant, toUtcIso } from '@shared/taskDates'
 import type { RemoteProject, RemoteProjectGroup, RemoteTask } from '../ticktick/remoteTypes'
@@ -351,7 +348,7 @@ export function localTaskToRemote(input: {
   const payload: Record<string, unknown> = {
     title: input.title,
     projectId: input.projectRemoteId,
-    content: restoreMarkdownBlankLines(input.content || ''),
+    content: input.content || '',
     priority: input.priority,
     status: input.status === 'completed' ? 2 : 0,
     isAllDay: input.is_all_day,
