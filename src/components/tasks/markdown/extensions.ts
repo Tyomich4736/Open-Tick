@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import HardBreak from '@tiptap/extension-hard-break'
 import Paragraph from '@tiptap/extension-paragraph'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
@@ -8,7 +9,54 @@ import { find as findLinks } from 'linkifyjs'
 import { Markdown } from 'tiptap-markdown'
 import type { MarkdownStorage } from 'tiptap-markdown'
 import { TaskItemWithMarkdownInput } from '@/components/tasks/taskListMarkdownInput'
-import { BLANK_LINE_MARKER } from '@shared/markdownBlankLines'
+import {
+  BLANK_LINE_MARKER,
+  isBlankLineMarker,
+  unwrapMarkdownHardBreaks,
+} from '@shared/markdownBlankLines'
+
+/**
+ * TipTap defaults to CommonMark `\`+newline for hard breaks, which TickTick shows as a
+ * literal backslash. Emit a plain newline instead (re-parsed via markdown-it `breaks: true`).
+ */
+const TickTickHardBreak = HardBreak.extend({
+  addKeyboardShortcuts() {
+    return {
+      // TickTick descriptions use a single `\n` per Enter; TipTap's default splits a
+      // paragraph (`\n\n`), which then balloons on push. Shift-Enter keeps a real paragraph.
+      Enter: () => this.editor.commands.setHardBreak(),
+      'Shift-Enter': () => this.editor.commands.splitBlock(),
+    }
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize(
+          state: { write: (s: string) => void; inTable?: boolean },
+          node: { type: { name: string } },
+          parent: { childCount: number; child: (i: number) => { type: { name: string } } },
+          index: number,
+        ) {
+          for (let i = index + 1; i < parent.childCount; i++) {
+            if (parent.child(i).type.name !== node.type.name) {
+              state.write('\n')
+              return
+            }
+          }
+        },
+        parse: {},
+      },
+    }
+  },
+})
+
+function isBlankParagraph(node: { content: { size: number }; textContent: string }): boolean {
+  return (
+    node.content.size === 0 ||
+    node.textContent.length === 0 ||
+    isBlankLineMarker(node.textContent)
+  )
+}
 
 export const ParagraphPreserveBlankLines = Paragraph.extend({
   addStorage() {
@@ -22,11 +70,8 @@ export const ParagraphPreserveBlankLines = Paragraph.extend({
           },
           node: { content: { size: number }; textContent: string },
         ) {
-          const isBlank =
-            node.content.size === 0 ||
-            node.textContent.length === 0 ||
-            node.textContent === BLANK_LINE_MARKER
-          if (isBlank) {
+          // Shift-Enter empty paragraphs → same placeholder used for hard-break blanks
+          if (isBlankParagraph(node)) {
             state.write(BLANK_LINE_MARKER)
           } else {
             state.renderInline(node)
@@ -39,7 +84,9 @@ export const ParagraphPreserveBlankLines = Paragraph.extend({
 })
 
 export function getMarkdown(editor: Editor): string {
-  return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown()
+  const md = (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown()
+  // TipTap markdown serializes hard breaks as `\`+newline; TickTick shows that slash.
+  return unwrapMarkdownHardBreaks(md)
 }
 
 export function openEditorLink(href: string) {
@@ -94,8 +141,10 @@ export function createMarkdownExtensions() {
       heading: { levels: [1, 2, 3] },
       link: false,
       paragraph: false,
+      hardBreak: false,
     }),
     ParagraphPreserveBlankLines,
+    TickTickHardBreak,
     Link.configure({
       openOnClick: false,
       autolink: true,
@@ -113,6 +162,8 @@ export function createMarkdownExtensions() {
     }),
     Markdown.configure({
       html: false,
+      // TickTick descriptions use plain `\n`; without this they collapse in CommonMark.
+      breaks: true,
       // Turn bare URLs in stored markdown into clickable <a> marks on load
       linkify: true,
       transformPastedText: true,

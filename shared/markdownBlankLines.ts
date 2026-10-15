@@ -1,42 +1,80 @@
-/** Markdown collapses empty paragraphs; NBSP keeps blank lines visible in TipTap. */
-export const BLANK_LINE_MARKER = '\u00a0'
+/**
+ * Placeholder on a blank hard-break line so markdown-it `breaks: true` does not
+ * treat consecutive `\n\n` as a paragraph split (which collapses blank lines).
+ * Zero-width — invisible, but the line stays a normal clickable text position.
+ */
+export const BLANK_LINE_MARKER = '\u200B'
+
+/** Older builds used NBSP / marker paragraphs; still recognized on read/push. */
+export const BLANK_LINE_MARKER_LEGACY = '\u00a0'
+
+export function isBlankLineMarker(value: string): boolean {
+  return (
+    value === BLANK_LINE_MARKER ||
+    value === BLANK_LINE_MARKER_LEGACY ||
+    value.trim() === BLANK_LINE_MARKER ||
+    value.trim() === BLANK_LINE_MARKER_LEGACY
+  )
+}
+
+/** Undo CommonMark hard-break markers (`\` + newline / two spaces + newline). */
+export function unwrapMarkdownHardBreaks(markdown: string): string {
+  if (!markdown) return markdown
+  return markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\\n/g, '\n').replace(/ {2}\n/g, '\n')
+}
 
 /**
- * Turn blank-line gaps into explicit NBSP paragraphs so they survive markdown parse.
- * Idempotent for content that already uses {@link BLANK_LINE_MARKER}.
+ * Collapse legacy paragraph-style markers (`a\n\nMARKER\n\nb`) to plain blank gaps.
+ */
+function legacyMarkersToBlankGaps(text: string): string {
+  if (!text.includes(BLANK_LINE_MARKER) && !text.includes(BLANK_LINE_MARKER_LEGACY)) {
+    return text
+  }
+  // Only rewrite when markers sit as their own `\n\n`-separated blocks
+  if (!/\n\n/.test(text)) return text
+
+  const parts = text.split(/\n{2,}/)
+  const hasBlockMarker = parts.some((part) => isBlankLineMarker(part))
+  if (!hasBlockMarker) return text
+
+  return parts.map((part) => (isBlankLineMarker(part) ? '' : part)).join('\n')
+}
+
+/**
+ * Encode blank-line gaps as hard-break lines (TickTick-style).
  *
- * @example
- * preserveMarkdownBlankLines('a\\n\\nb') // 'a\\n\\n\\u00a0\\n\\nb'
+ * `a\n\nb`  → `a\n\u200B\nb`     (one clickable blank line)
+ * `a\n\n\nb` → `a\n\u200B\n\u200B\nb` (two clickable blank lines)
+ *
+ * Soft breaks (`\n`) are left alone. Idempotent for content already encoded this way.
  */
 export function preserveMarkdownBlankLines(markdown: string): string {
   if (!markdown) return markdown
 
-  const text = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-  const tokens = text.split(/(\n{2,})/)
-  const out: string[] = []
+  const text = legacyMarkersToBlankGaps(unwrapMarkdownHardBreaks(markdown))
 
-  for (let i = 0; i < tokens.length; i++) {
-    const tok = tokens[i]!
-    if (/^\n{2,}$/.test(tok)) {
-      const blankParagraphs = tok.length - 1
-      const prev = out[out.length - 1]
-      const next = tokens[i + 1]
-      const prevIsMarker = prev === BLANK_LINE_MARKER
-      const nextIsMarker = next === BLANK_LINE_MARKER || next?.trim() === BLANK_LINE_MARKER
+  return text.replace(/\n{2,}/g, (gap) => {
+    const blankLines = gap.length - 1
+    return `\n${(BLANK_LINE_MARKER + '\n').repeat(blankLines)}`
+  })
+}
 
-      // Gaps around an existing marker are structural (`\n\n` before/after NBSP).
-      const toAdd = prevIsMarker || nextIsMarker ? blankParagraphs - 1 : blankParagraphs
-      for (let b = 0; b < toAdd; b++) out.push(BLANK_LINE_MARKER)
-      continue
-    }
+/**
+ * Prepare description content for TickTick: strip blank-line placeholders.
+ */
+export function toTickTickContent(markdown: string): string {
+  if (!markdown) return markdown
 
-    if (tok === BLANK_LINE_MARKER || tok.trim() === BLANK_LINE_MARKER) {
-      out.push(BLANK_LINE_MARKER)
-      continue
-    }
+  let text = unwrapMarkdownHardBreaks(markdown)
+  text = legacyMarkersToBlankGaps(text)
 
-    if (tok !== '') out.push(tok)
+  if (!text.includes(BLANK_LINE_MARKER) && !text.includes(BLANK_LINE_MARKER_LEGACY)) {
+    return text
   }
 
-  return out.join('\n\n')
+  // Hard-break style: marker-only lines → empty lines
+  return text
+    .split('\n')
+    .map((line) => (isBlankLineMarker(line) ? '' : line))
+    .join('\n')
 }

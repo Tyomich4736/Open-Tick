@@ -149,7 +149,7 @@ button {
   margin: 0.4em 0;
 }
 
-/* Keep visually blank lines (empty / NBSP-only paragraphs) taking space */
+/* Empty paragraphs (Shift-Enter) still take a line of space */
 .markdown-body p:empty,
 .markdown-body p:has(> br:only-child) {
   min-height: 1.55em;
