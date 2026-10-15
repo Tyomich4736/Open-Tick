@@ -5,12 +5,14 @@ import { AccountSettings } from '@/components/settings/AccountSettings'
 import { CalendarSettings } from '@/components/settings/CalendarSettings'
 import { DesktopSettings } from '@/components/settings/DesktopSettings'
 import { NotificationsSettings } from '@/components/settings/NotificationsSettings'
+import { SmartListsSettings } from '@/components/settings/SmartListsSettings'
 import { useTimeFormat, type TimeFormat } from '@/hooks/useTimeFormat'
 import { useListDensity } from '@/hooks/useLayoutSettings'
 import { listTimezones, useTimezone } from '@/hooks/useTimezone'
 
 type SettingsTab =
   | 'general'
+  | 'smart-lists'
   | 'calendar'
   | 'appearance'
   | 'desktop'
@@ -20,6 +22,7 @@ type SettingsTab =
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'general', label: 'General' },
+  { id: 'smart-lists', label: 'Smart lists' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'desktop', label: 'Desktop' },
@@ -133,6 +136,7 @@ export function SettingsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
         {tab === 'general' && <GeneralSettings />}
+        {tab === 'smart-lists' && <SmartListsSettings />}
         {tab === 'calendar' && <CalendarSettings />}
         {tab === 'appearance' && <AppearanceSettings />}
         {tab === 'desktop' && <DesktopSettings />}
