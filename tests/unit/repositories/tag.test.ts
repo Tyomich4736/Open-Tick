@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import type { Repositories } from '../../../electron/main/db/openDatabase'
 import { closeDatabaseInstance, openDatabase } from '../../../electron/main/db/openDatabase'
-import { runMigrations } from '../../../electron/main/db/migrations'
+import { migrations, runMigrations } from '../../../electron/main/db/migrations'
 
 describe('TagRepository', () => {
   let repos: Repositories
@@ -69,11 +69,17 @@ describe('SettingsRepository', () => {
 describe('runMigrations', () => {
   it('applies migrations idempotently', () => {
     const repos = openDatabase(':memory:')
+    const countVersions = () =>
+      (
+        repos.db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as {
+          version: number
+        }[]
+      ).map((row) => row.version)
+
+    expect(countVersions()).toEqual(migrations.map((m) => m.version))
+
     runMigrations(repos.db)
-    const versions = repos.db.prepare('SELECT version FROM schema_migrations').all() as {
-      version: number
-    }[]
-    expect(versions).toHaveLength(1)
+    expect(countVersions()).toEqual(migrations.map((m) => m.version))
 
     closeDatabaseInstance(repos.db)
   })

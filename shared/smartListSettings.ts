@@ -1,5 +1,7 @@
 import type { SmartListId } from './filters'
 
+export type { SmartListId }
+
 export const SMART_LIST_SETTINGS_KEY = 'smart_lists.config'
 
 export const DEFAULT_SMART_LIST_ORDER: SmartListId[] = [

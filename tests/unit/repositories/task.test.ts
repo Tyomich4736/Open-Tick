@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { addDays, formatISO } from 'date-fns'
+import { addDays, formatISO, parseISO } from 'date-fns'
 import type { Repositories } from '../../../electron/main/db/openDatabase'
 import { closeDatabaseInstance, openDatabase } from '../../../electron/main/db/openDatabase'
 import { defaultRecurrence } from '../../../shared/recurrence'
@@ -138,6 +138,13 @@ describe('TaskRepository', () => {
     const second = repos.tasks.create({ title: 'Second', project_id: inbox.id })
     repos.tasks.complete(first.id)
     repos.tasks.complete(second.id)
+    // Distinct timestamps — complete() can share the same millisecond.
+    repos.db
+      .prepare(`UPDATE tasks SET completed_at = ? WHERE id = ?`)
+      .run('2026-01-01T10:00:00.000Z', first.id)
+    repos.db
+      .prepare(`UPDATE tasks SET completed_at = ? WHERE id = ?`)
+      .run('2026-01-01T11:00:00.000Z', second.id)
 
     const completed = repos.tasks.list({ smart_list: 'completed' })
     expect(completed[0].title).toBe('Second')
@@ -183,12 +190,14 @@ describe('TaskRepository', () => {
 
   it('spawns next occurrence when completing a recurring task', () => {
     const inbox = repos.projects.ensureInbox()
-    const due = formatISO(new Date('2026-08-28T12:00:00.000Z'))
+    const due = '2026-08-28T12:00:00.000Z'
+    const dueDate = parseISO(due)
     const task = repos.tasks.create({
       title: 'Weekly standup',
       project_id: inbox.id,
       due_date: due,
-      recurrence_rule: defaultRecurrence('weekly'),
+      // Match advanceWeekly's local getDay() so the next due is stable across TZ.
+      recurrence_rule: { ...defaultRecurrence('weekly'), weekdays: [dueDate.getDay()] },
       reminders: [{ kind: 'before', offset_minutes: 15 }],
       tags: ['work'],
     })
@@ -202,7 +211,7 @@ describe('TaskRepository', () => {
     const next = repos.tasks.getById(pending[0].id)!
     expect(next.recurrence_rule).not.toBeNull()
     expect(next.recurrence_parent_id).toBe(task.id)
-    expect(next.due_date).toBe(formatISO(addDays(new Date(due), 7)))
+    expect(next.due_date).toBe(addDays(dueDate, 7).toISOString())
     expect(repos.reminders.listForTask(next.id)).toHaveLength(1)
     expect(repos.tags.getTagsForTask(next.id)).toEqual(['work'])
   })

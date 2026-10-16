@@ -38,6 +38,6 @@ describe('ProjectRepository', () => {
 
   it('prevents deleting inbox', () => {
     const inbox = repos.projects.ensureInbox()
-    expect(() => repos.projects.softDelete(inbox.id)).toThrow('Cannot delete the inbox project')
+    expect(() => repos.projects.softDelete(inbox.id)).toThrow('Cannot delete the inbox list')
   })
 })

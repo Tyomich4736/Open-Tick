@@ -1,6 +1,8 @@
 appId: com.opentick.app
 productName: Open Tick
 copyright: Copyright © 2026
+# Releases are uploaded by .github/workflows/release.yml (not electron-builder).
+publish: null
 directories:
   buildResources: resources
   output: release
