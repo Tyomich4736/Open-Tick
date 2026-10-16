@@ -91,6 +91,11 @@ Prerelease versions work too, e.g. `release/1.1.0-beta.1` → tag `v1.1.0-beta.1
 
 > macOS artifacts are **unsigned**. Users may need to right-click → Open, or run  
 > `xattr -cr "/Applications/Open Tick.app"` after installing.
+>
+> **Windows:** if the app exits immediately with `Invalid file descriptor to ICU data received`,
+> reinstall with the NSIS installer (it grants sandbox ACLs), or run as admin once:
+> `icacls "%LOCALAPPDATA%\Programs\Open Tick" /grant *S-1-15-2-2:(OI)(CI)(RX) /T`
+> (adjust the path if you chose a custom install directory). Do not run from a network/OneDrive folder.
 
 ### Useful scripts
 

@@ -109,3 +109,5 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
+  # Grant AppContainer RX so sandboxed GPU/utility processes can open icudtl.dat
+  include: build/installer.nsh
