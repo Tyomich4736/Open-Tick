@@ -70,7 +70,3 @@ export function TaskPanelMultiSelect() {
   )
 }
 
-export function useSelectedTaskStatuses(selectedIds: string[]) {
-  const { statuses } = useCachedTaskMeta(selectedIds)
-  return statuses
-}

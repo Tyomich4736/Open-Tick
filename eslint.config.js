@@ -28,4 +28,11 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // Vite entry boots sticky/quick-capture windows; not a HMR component module.
+    files: ['src/main.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 )
