@@ -34,7 +34,7 @@ function clampHour(value: unknown, min: number, max: number, fallback: number): 
 }
 
 function normalize(startHour: number, endHour: number): CalendarVisibleHours {
-  let start = clampHour(startHour, 0, 23, DEFAULT_DAY_START_HOUR)
+  const start = clampHour(startHour, 0, 23, DEFAULT_DAY_START_HOUR)
   let end = clampHour(endHour, 1, 24, DEFAULT_DAY_END_HOUR)
   if (end <= start) end = Math.min(24, start + 1)
   return { startHour: start, endHour: end }

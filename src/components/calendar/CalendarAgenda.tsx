@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { addDays, eachDayOfInterval, format, isToday, parseISO } from 'date-fns'
+import { addDays, eachDayOfInterval, format, isToday } from 'date-fns'
 import type { TaskListItem } from '@shared/entities'
 import { formatDueRange } from '@/lib/formatDueDate'
 import { tasksForDay } from '@/lib/calendarUtils'
@@ -90,13 +90,4 @@ export function CalendarAgenda({ cursor, tasks, days = 30 }: CalendarAgendaProps
       </div>
     </div>
   )
-}
-
-/** Parse store cursor `yyyy-MM-dd` to local Date at noon. */
-export function parseCursorDate(cursorDate: string): Date {
-  try {
-    return parseISO(`${cursorDate}T12:00:00`)
-  } catch {
-    return new Date()
-  }
 }

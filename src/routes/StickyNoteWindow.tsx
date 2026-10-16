@@ -40,12 +40,13 @@ function useStickyDebouncedSave(
     [],
   )
 
-  // Reset only when switching tasks
+  // Reset only when switching tasks (intentionally not depending on full `task`)
   useEffect(() => {
     if (!task) return
     dirtyRef.current = { title: false, content: false }
     setTitleState(task.title)
     setContentState(task.content ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on task id change only
   }, [task?.id])
 
   // Adopt server updates for fields the user isn't editing

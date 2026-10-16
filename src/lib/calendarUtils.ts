@@ -182,3 +182,12 @@ export function layoutTimedEvents(
 
   return result
 }
+
+/** Parse store cursor `yyyy-MM-dd` to local Date at noon. */
+export function parseCursorDate(cursorDate: string): Date {
+  try {
+    return parseISO(`${cursorDate}T12:00:00`)
+  } catch {
+    return new Date()
+  }
+}

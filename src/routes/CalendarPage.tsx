@@ -3,7 +3,8 @@ import { eachDayOfInterval } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { ViewModeSwitcher } from '@/components/calendar/ViewModeSwitcher'
 import { CalendarMonth } from '@/components/calendar/CalendarMonth'
-import { CalendarAgenda, parseCursorDate } from '@/components/calendar/CalendarAgenda'
+import { CalendarAgenda } from '@/components/calendar/CalendarAgenda'
+import { parseCursorDate } from '@/lib/calendarUtils'
 import {
   CalendarTimeGrid,
   type GridCreateRange,

@@ -120,7 +120,11 @@ export function getCredentialsPublic(): TickTickCredentialsPublic {
   const storedId = readSetting<string>(TICKTICK_SETTING_KEYS.clientId)?.trim() ?? ''
   const storedSecret = decryptValue(readSetting<string>(TICKTICK_SETTING_KEYS.clientSecretEnc))
   const storedPat = decryptValue(readSetting<string>(TICKTICK_SETTING_KEYS.accessTokenPatEnc))
-  const fromEnv = !storedId && !storedSecret && Boolean(envClientId() || envClientSecret() || envPat())
+  const fromEnv =
+    !storedId &&
+    !storedSecret &&
+    !storedPat &&
+    Boolean(envClientId() || envClientSecret() || envPat())
 
   const config = getTickTickConfig()
   return {

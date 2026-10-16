@@ -231,7 +231,7 @@ export function normalizeRemoteSchedule(
   timeZone?: string | null,
 ): { due_date: string | null; start_date: string | null } {
   let due = dueDate ?? null
-  let start = startDate ?? null
+  const start = startDate ?? null
 
   if (!start && !due) return { due_date: null, start_date: null }
   if (!start) {
