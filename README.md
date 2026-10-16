@@ -69,6 +69,29 @@ npm run package:mac    # macOS DMG (requires macOS)
 npm run package:linux  # Linux AppImage + deb (x64)
 ```
 
+### GitHub Releases (CI)
+
+Push a `release/X.Y.Z` branch to build installers for Windows, macOS, and Linux and publish a GitHub Release tagged `vX.Y.Z`:
+
+```bash
+git checkout main
+git pull
+git checkout -b release/1.0.1
+# optional: bump notes / changelog, then:
+git push -u github HEAD
+```
+
+The [Release](.github/workflows/release.yml) workflow:
+
+1. Runs lint, typecheck, and tests
+2. Builds NSIS / DMG / AppImage+deb on GitHub-hosted runners
+3. Creates release **Open Tick X.Y.Z** with those artifacts
+
+Prerelease versions work too, e.g. `release/1.1.0-beta.1` → tag `v1.1.0-beta.1` (marked as prerelease).
+
+> macOS artifacts are **unsigned**. Users may need to right-click → Open, or run  
+> `xattr -cr "/Applications/Open Tick.app"` after installing.
+
 ### Useful scripts
 
 | Script | Description |

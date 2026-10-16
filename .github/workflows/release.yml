@@ -1,0 +1,168 @@
+# Build installers and publish a GitHub Release when you push a release branch.
+#
+#   git checkout -b release/1.0.1
+#   git push -u github HEAD
+#
+# Creates tag v1.0.1 and attaches Windows / macOS / Linux artifacts.
+# macOS builds are unsigned (Gatekeeper may warn until you add signing secrets).
+
+name: Release
+
+on:
+  push:
+    branches:
+      - 'release/**'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  # Skip code-signing discovery so unsigned CI builds do not fail
+  CSC_IDENTITY_AUTO_DISCOVERY: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse version from branch
+        id: meta
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          VERSION="${BRANCH#release/}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Branch must be release/X.Y.Z (got '$BRANCH')"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION (tag v$VERSION)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Quality gates
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            script: package:win
+          - os: macos-latest
+            name: macos
+            script: package:mac
+          - os: ubuntu-22.04
+            name: linux
+            script: package:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set package version
+        run: npm version "${{ needs.prepare.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fakeroot \
+            rpm \
+            libfuse2
+
+      - name: Build ${{ matrix.name }} installers
+        run: npm run ${{ matrix.script }}
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p dist-out
+          # electron-builder writes to ./release (see electron-builder.yml)
+          shopt -s nullglob
+          for f in release/*.{exe,dmg,AppImage,deb,zip,yml,blockmap}; do
+            cp -v "$f" dist-out/
+          done
+          # Also pick up nested builder output if any
+          find release -maxdepth 2 -type f \( \
+            -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o \
+            -name '*.deb' -o -name '*.zip' -o -name '*.yml' -o -name '*.blockmap' \
+          \) -exec cp -v {} dist-out/ \;
+          ls -lah dist-out
+
+      - name: Upload ${{ matrix.name }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-tick-${{ needs.prepare.outputs.version }}-${{ matrix.name }}
+          path: dist-out/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: open-tick-${{ needs.prepare.outputs.version }}-*
+          merge-multiple: true
+
+      - name: List release files
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Open Tick ${{ needs.prepare.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(needs.prepare.outputs.version, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: artifacts/*
+          body: |
+            ## Open Tick ${{ needs.prepare.outputs.version }}
+
+            Built from branch `${{ github.ref_name }}` (`${{ github.sha }}`).
+
+            | Platform | Artifact |
+            |----------|----------|
+            | Windows | `Open Tick-*-win-x64.exe` (NSIS) |
+            | macOS | `Open Tick-*-mac-*.dmg` (unsigned) |
+            | Linux | `open-tick-*-linux-x64.AppImage` / `.deb` |
+
+            ### Notes
+            - **macOS:** the DMG is not notarized. Right-click → Open the first time, or remove the quarantine flag.
+            - **Linux AppImage:** may need `chmod +x` after download.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
