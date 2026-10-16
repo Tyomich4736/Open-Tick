@@ -13,6 +13,8 @@ export interface PersistedSettingApi<T> {
   defaultValue: T
   /** Sync snapshot for pure helpers (updated when settings load / change). */
   getValue: () => T
+  /** Resolves after the first settings read (shared in-flight). */
+  whenReady: () => Promise<void>
   useSetting: () => readonly [T, (next: T) => void]
 }
 
@@ -24,7 +26,7 @@ export function createPersistedSettingHook<T>(
   options: PersistedSettingOptions<T>,
 ): PersistedSettingApi<T> {
   let cached = options.defaultValue
-  let loaded = false
+  let loadPromise: Promise<void> | null = null
   const listeners = new Set<(v: T) => void>()
 
   function notify(next: T) {
@@ -32,14 +34,17 @@ export function createPersistedSettingHook<T>(
     for (const listener of listeners) listener(next)
   }
 
-  async function ensureLoaded(): Promise<void> {
-    if (loaded) return
-    loaded = true
-    const result = await ipc.settings.get<unknown>(options.key)
-    if (result.ok) {
-      const parsed = options.parse(result.data)
-      if (parsed != null) notify(parsed)
+  function ensureLoaded(): Promise<void> {
+    if (!loadPromise) {
+      loadPromise = (async () => {
+        const result = await ipc.settings.get<unknown>(options.key)
+        if (result.ok) {
+          const parsed = options.parse(result.data)
+          if (parsed != null) notify(parsed)
+        }
+      })()
     }
+    return loadPromise
   }
 
   function getValue(): T {
@@ -69,6 +74,7 @@ export function createPersistedSettingHook<T>(
     key: options.key,
     defaultValue: options.defaultValue,
     getValue,
+    whenReady: ensureLoaded,
     useSetting,
   }
 }

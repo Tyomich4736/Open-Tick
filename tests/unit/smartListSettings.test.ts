@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SMART_LISTS_CONFIG,
+  defaultSmartListPath,
   enabledSmartListIds,
   moveSmartList,
   normalizeSmartListsConfig,
@@ -64,5 +65,15 @@ describe('moveSmartList / setSmartListEnabled', () => {
       'week',
       'completed',
     ])
+  })
+
+  it('picks the first enabled list as the default home path', () => {
+    expect(defaultSmartListPath(DEFAULT_SMART_LISTS_CONFIG)).toBe('/inbox')
+    const todayFirst = moveSmartList(
+      setSmartListEnabled(DEFAULT_SMART_LISTS_CONFIG, 'inbox', false),
+      1,
+      0,
+    )
+    expect(defaultSmartListPath(todayFirst)).toBe('/today')
   })
 })

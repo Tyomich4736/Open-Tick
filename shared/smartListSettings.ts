@@ -70,6 +70,12 @@ export function enabledSmartListIds(config: SmartListsConfig): SmartListId[] {
   return config.filter((item) => item.enabled).map((item) => item.id)
 }
 
+/** First enabled smart list path (sidebar order); falls back to Inbox. */
+export function defaultSmartListPath(config: SmartListsConfig): string {
+  const first = enabledSmartListIds(config)[0] ?? 'inbox'
+  return smartListPath(first)
+}
+
 export function moveSmartList(config: SmartListsConfig, from: number, to: number): SmartListsConfig {
   if (from === to || from < 0 || to < 0 || from >= config.length || to >= config.length) {
     return config
