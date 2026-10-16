@@ -27,10 +27,10 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "package:win": "npm run build && npm run rebuild:native && electron-builder --win",
-    "package:mac": "npm run build && npm run rebuild:native && electron-builder --mac",
-    "package:linux": "npm run build && npm run rebuild:native && electron-builder --linux",
-    "package": "npm run build && npm run rebuild:native && electron-builder --win --mac --linux",
+    "package:win": "npm run build && npm run rebuild:native && electron-builder --win --publish never",
+    "package:mac": "npm run build && npm run rebuild:native && electron-builder --mac --publish never",
+    "package:linux": "npm run build && npm run rebuild:native && electron-builder --linux --publish never",
+    "package": "npm run build && npm run rebuild:native && electron-builder --win --mac --linux --publish never",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
