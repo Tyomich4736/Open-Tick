@@ -274,6 +274,20 @@ export class SyncEngine {
     let partial = false
     const pullErrors: string[] = []
 
+    // Monotonic pull progress — lock total after lists are known so % never shrinks.
+    let progressStep = 0
+    let progressTotal = 1
+    const reportProgress = (message: string, entityType?: SyncProgressEvent['entityType']) => {
+      progressStep = Math.min(progressStep + 1, progressTotal)
+      this.setProgress({
+        phase: 'pull',
+        entityType,
+        current: progressStep,
+        total: progressTotal,
+        message,
+      })
+    }
+
     try {
       this.setProgress({
         phase: 'pull',
@@ -300,14 +314,25 @@ export class SyncEngine {
       })
 
       const remoteProjects = await client.listProjects()
+      const openProjects = remoteProjects.filter((p) => !p.closed)
+      // folders + lists + inbox + each open list + completed + reconcile
+      progressTotal = 2 + 1 + openProjects.length + 2
+      progressStep = 2
+      this.setProgress({
+        phase: 'pull',
+        entityType: 'project',
+        current: progressStep,
+        total: progressTotal,
+        message: 'Pulling lists…',
+      })
+
       const projectIdByRemote = new Map<string, string>()
 
       // Ensure inbox exists locally
       const inbox = repos.projects.ensureInbox()
       if (inbox.remote_id) projectIdByRemote.set(inbox.remote_id, inbox.id)
 
-      for (const remote of remoteProjects) {
-        if (remote.closed) continue
+      for (const remote of openProjects) {
         const mapped = remoteProjectToLocal(remote)
         const folderId = mapped.group_remote_id
           ? folderIdByRemote.get(mapped.group_remote_id) ?? null
@@ -320,14 +345,13 @@ export class SyncEngine {
         stats.projects += 1
       }
 
-      // Inbox data
-      this.setProgress({
-        phase: 'pull',
-        entityType: 'task',
-        current: 0,
-        total: remoteProjects.length + 1,
-        message: 'Pulling Inbox…',
-      })
+      reportProgress('Pulling Inbox…', 'task')
+
+      const activeByProject: Array<{
+        localId: string
+        remoteId: string
+        activeRemoteIds: Set<string>
+      }> = []
 
       try {
         const inboxData = await client.getInboxData()
@@ -351,6 +375,18 @@ export class SyncEngine {
           stats,
           inboxRemoteId ?? undefined,
         )
+        if (inboxRemoteId) {
+          const inboxLocalId = projectIdByRemote.get(inboxRemoteId)
+          if (inboxLocalId) {
+            activeByProject.push({
+              localId: inboxLocalId,
+              remoteId: inboxRemoteId,
+              activeRemoteIds: new Set(
+                inboxTaskList.map((t) => t.id).filter((id): id is string => Boolean(id)),
+              ),
+            })
+          }
+        }
       } catch (error) {
         partial = true
         const msg = error instanceof Error ? error.message : String(error)
@@ -359,20 +395,23 @@ export class SyncEngine {
       }
 
       let index = 0
-      for (const remote of remoteProjects) {
-        if (remote.closed) continue
+      for (const remote of openProjects) {
         index += 1
-        this.setProgress({
-          phase: 'pull',
-          entityType: 'task',
-          current: index,
-          total: remoteProjects.length,
-          message: `Pulling lists (${index}/${remoteProjects.length})`,
-        })
+        reportProgress(`Pulling lists (${index}/${openProjects.length})`, 'task')
         try {
           const data = await client.getProjectData(remote.id)
           const tasks = Array.isArray(data?.tasks) ? data.tasks : []
           stats.tasks += this.upsertTaskBatch(tasks, projectIdByRemote, stats, remote.id)
+          const localProjectId = projectIdByRemote.get(remote.id)
+          if (localProjectId) {
+            activeByProject.push({
+              localId: localProjectId,
+              remoteId: remote.id,
+              activeRemoteIds: new Set(
+                tasks.map((t) => t.id).filter((id): id is string => Boolean(id)),
+              ),
+            })
+          }
         } catch (error) {
           partial = true
           const msg = error instanceof Error ? error.message : String(error)
@@ -381,6 +420,58 @@ export class SyncEngine {
         }
         await sleep(200)
       }
+
+      // `/data` omits completed tasks. Fetch a bounded completed window, then
+      // reconcile a capped number of vanished locals (avoids endless per-task GETs).
+      reportProgress('Pulling completed…', 'task')
+      const completedRemoteIds = new Set<string>()
+      try {
+        const completedProjectIds = openProjects.map((p) => p.id)
+        const inboxRemoteId = stateRepo.get().inbox_remote_id
+        if (inboxRemoteId && !completedProjectIds.includes(inboxRemoteId)) {
+          completedProjectIds.push(inboxRemoteId)
+        }
+
+        const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+        const completedTasks = await client.listCompletedTasksSince(completedProjectIds, since, {
+          windowDays: 45,
+          maxWindows: 2,
+        })
+        for (const t of completedTasks) {
+          if (t.id) completedRemoteIds.add(t.id)
+        }
+        if (completedTasks.length > 0) {
+          stats.tasks += this.upsertTaskBatch(completedTasks, projectIdByRemote, stats)
+        }
+      } catch (error) {
+        partial = true
+        const msg = error instanceof Error ? error.message : String(error)
+        pullErrors.push(`Completed: ${msg}`)
+        console.warn('[sync] completed tasks pull failed', error)
+      }
+
+      reportProgress('Reconciling completed…', 'task')
+      try {
+        stats.tasks += await this.reconcileVanishedTasks(
+          client,
+          activeByProject,
+          completedRemoteIds,
+          projectIdByRemote,
+          stats,
+        )
+      } catch (error) {
+        partial = true
+        const msg = error instanceof Error ? error.message : String(error)
+        pullErrors.push(`Reconcile: ${msg}`)
+        console.warn('[sync] vanished-task reconcile failed', error)
+      }
+
+      this.setProgress({
+        phase: 'pull',
+        current: progressTotal,
+        total: progressTotal,
+        message: 'Pull complete',
+      })
 
       const warning =
         partial && pullErrors.length ? pullErrors.slice(0, 3).join(' · ') : null
@@ -424,6 +515,58 @@ export class SyncEngine {
 
       throw error instanceof Error ? error : new Error(message)
     }
+  }
+
+  /**
+   * Local pending+synced tasks missing from `/data` were completed/deleted remotely.
+   * Prefer the completed-list batch; only GET individuals up to a hard cap so pull
+   * cannot stall on large stale sets.
+   */
+  private async reconcileVanishedTasks(
+    client: ReturnType<typeof getTickTickClient>,
+    projects: Array<{ localId: string; remoteId: string; activeRemoteIds: Set<string> }>,
+    alreadyCompletedRemoteIds: Set<string>,
+    projectIdByRemote: Map<string, string>,
+    stats: { skippedDirty: number },
+  ): Promise<number> {
+    const repos = getRepositories()
+    const MAX_GETS = 25
+    let gets = 0
+    let count = 0
+
+    for (const project of projects) {
+      const missing = repos.tasks
+        .listSyncedPendingWithRemote(project.localId)
+        .filter((row) => !project.activeRemoteIds.has(row.remote_id))
+
+      for (const row of missing) {
+        if (alreadyCompletedRemoteIds.has(row.remote_id)) {
+          // Already upserted from /task/completed — nothing else to do.
+          continue
+        }
+        if (gets >= MAX_GETS) {
+          console.warn('[sync] reconcile getTask cap reached; remaining vanish on next sync')
+          return count
+        }
+        gets += 1
+        try {
+          const remote = await client.getTask(project.remoteId, row.remote_id)
+          if (!remote) {
+            repos.tasks.markRemovedFromRemote(row.id)
+            count += 1
+            continue
+          }
+          count += this.upsertTaskBatch([remote], projectIdByRemote, stats, project.remoteId)
+        } catch (error) {
+          console.warn(
+            `[sync] reconcile ${row.remote_id} failed`,
+            error instanceof Error ? error.message : error,
+          )
+        }
+        await sleep(50)
+      }
+    }
+    return count
   }
 
   private upsertTaskBatch(

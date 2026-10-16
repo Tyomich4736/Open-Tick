@@ -1,6 +1,27 @@
 import { getTickTickConfig } from './config'
 import { getTokenService } from './TokenService'
-import type { RemoteProject, RemoteProjectData, RemoteProjectGroup } from './remoteTypes'
+import type {
+  RemoteProject,
+  RemoteProjectData,
+  RemoteProjectGroup,
+  RemoteTask,
+} from './remoteTypes'
+
+/** TickTick completed-list filters prefer `…+0000` over `…Z`. */
+export function toTickTickDateParam(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, '.000+0000').replace(/Z$/, '+0000')
+}
+
+/** Normalize `/task/completed` payloads (array or `{ tasks|data: [] }`). */
+export function coerceRemoteTaskArray(data: unknown): RemoteTask[] {
+  if (Array.isArray(data)) return data as RemoteTask[]
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>
+    if (Array.isArray(obj.tasks)) return obj.tasks as RemoteTask[]
+    if (Array.isArray(obj.data)) return obj.data as RemoteTask[]
+  }
+  return []
+}
 
 export class TickTickApiError extends Error {
   constructor(
@@ -143,6 +164,75 @@ export class TickTickClient {
   /** GET /project/inbox/data */
   async getInboxData(): Promise<RemoteProjectData> {
     return this.request<RemoteProjectData>('GET', '/project/inbox/data')
+  }
+
+  /** GET /project/{projectId}/task/{taskId} — single task (includes completed). */
+  async getTask(projectRemoteId: string, taskRemoteId: string): Promise<RemoteTask | null> {
+    try {
+      return await this.request<RemoteTask>(
+        'GET',
+        `/project/${encodeURIComponent(projectRemoteId)}/task/${encodeURIComponent(taskRemoteId)}`,
+      )
+    } catch (error) {
+      if (error instanceof TickTickApiError && error.status === 404) return null
+      throw error
+    }
+  }
+
+  /**
+   * POST /task/completed — completed tasks in a date range (`/data` omits them).
+   * Responses are capped (~200); keep lookback windows small to avoid long pulls.
+   */
+  async listCompletedTasks(params: {
+    projectIds?: string[]
+    startDate: string
+    endDate: string
+  }): Promise<RemoteTask[]> {
+    const data = await this.request<unknown>('POST', '/task/completed', {
+      projectIds: params.projectIds,
+      startDate: params.startDate,
+      endDate: params.endDate,
+    })
+    return coerceRemoteTaskArray(data)
+  }
+
+  /**
+   * Fetch completed tasks since `since` in a few fixed windows (capped).
+   * Always advances the window — never half-steps — so pull cannot spin.
+   */
+  async listCompletedTasksSince(
+    projectIds: string[],
+    since: Date,
+    options?: { windowDays?: number; maxWindows?: number },
+  ): Promise<RemoteTask[]> {
+    if (projectIds.length === 0) return []
+
+    const windowDays = options?.windowDays ?? 45
+    const maxWindows = options?.maxWindows ?? 2
+    const windowMs = windowDays * 24 * 60 * 60 * 1000
+    const seen = new Set<string>()
+    const out: RemoteTask[] = []
+
+    let windowEnd = new Date()
+    for (let i = 0; i < maxWindows && windowEnd.getTime() > since.getTime(); i++) {
+      const windowStart = new Date(Math.max(since.getTime(), windowEnd.getTime() - windowMs))
+      const batch = await this.listCompletedTasks({
+        projectIds,
+        startDate: toTickTickDateParam(windowStart),
+        endDate: toTickTickDateParam(windowEnd),
+      })
+      for (const task of batch) {
+        if (!task?.id || seen.has(task.id)) continue
+        seen.add(task.id)
+        out.push(task)
+      }
+      windowEnd = windowStart
+      if (i < maxWindows - 1 && windowEnd.getTime() > since.getTime()) {
+        await sleep(120)
+      }
+    }
+
+    return out
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

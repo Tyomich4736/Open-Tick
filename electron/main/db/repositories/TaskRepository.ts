@@ -608,6 +608,33 @@ export class TaskRepository {
     return row ? mapTask(row) : null
   }
 
+  /**
+   * Synced pending tasks with a remote id — candidates when `/data` dropped them
+   * after remote complete/delete.
+   */
+  listSyncedPendingWithRemote(projectId: string): Array<{ id: string; remote_id: string }> {
+    return this.db
+      .prepare(
+        `SELECT id, remote_id FROM tasks
+         WHERE project_id = ?
+           AND deleted_at IS NULL
+           AND status = 'pending'
+           AND sync_status = 'synced'
+           AND remote_id IS NOT NULL`,
+      )
+      .all(projectId) as Array<{ id: string; remote_id: string }>
+  }
+
+  /** Remote row is gone — drop locally without queuing an outbound delete. */
+  markRemovedFromRemote(id: string): void {
+    const now = nowIso()
+    this.db
+      .prepare(
+        `UPDATE tasks SET deleted_at = ?, updated_at = ?, sync_status = 'synced' WHERE id = ?`,
+      )
+      .run(now, now, id)
+  }
+
   /** Pending outbound rows (includes soft-deleted pending_delete). */
   listPendingSync(): Task[] {
     const rows = this.db

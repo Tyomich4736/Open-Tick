@@ -34,11 +34,31 @@ export function useSyncStatus() {
 
   useEffect(() => {
     void refresh().finally(() => setReady(true))
-    const unsubStatus = ipc.onSyncStatusChanged(setStatus)
+    let clearTimer: number | undefined
+    const unsubStatus = ipc.onSyncStatusChanged((next) => {
+      setStatus(next)
+      // Don't leave a half-finished bar up after sync ends
+      if (!next.isSyncing) {
+        window.clearTimeout(clearTimer)
+        clearTimer = window.setTimeout(() => setProgress(null), 400)
+      }
+    })
     const unsubProgress = ipc.onSyncProgress((p) => {
-      setProgress(p)
-      if (p.current >= p.total) {
-        window.setTimeout(() => setProgress(null), 800)
+      setProgress((prev) => {
+        // Ignore out-of-order events that would shrink the bar
+        if (
+          prev &&
+          prev.total > 0 &&
+          p.total > 0 &&
+          p.current / p.total + 1e-9 < prev.current / prev.total
+        ) {
+          return prev
+        }
+        return p
+      })
+      if (p.current >= p.total && p.total > 0) {
+        window.clearTimeout(clearTimer)
+        clearTimer = window.setTimeout(() => setProgress(null), 600)
       }
     })
     const unsubChanged = ipc.onChanged((notif) => {
@@ -47,6 +67,7 @@ export function useSyncStatus() {
       }
     })
     return () => {
+      window.clearTimeout(clearTimer)
       unsubStatus()
       unsubProgress()
       unsubChanged()
