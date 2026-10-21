@@ -1,0 +1,24 @@
+---
+description: Open Tick architecture and agent defaults
+alwaysApply: true
+---
+
+# Open Tick — core
+
+Local-first Electron task app (TickTick API sync). Stack: Electron main + React renderer + SQLite (`better-sqlite3`).
+
+## Layout
+
+- `electron/main/` — main process, DB, sync, IPC handlers, notifications
+- `electron/preload/` — bridge only
+- `shared/` — types and pure helpers shared by main + renderer (`@shared/*`)
+- `src/` — React UI
+- `tests/unit/` — Vitest (Node ABI, not Electron)
+
+## Agent defaults
+
+- Do **not** commit or push unless the user explicitly asks.
+- Prefer extending existing repositories, IPC channels, and hooks over new parallel systems.
+- Types used by the renderer from `shared/` must be **exported** (re-export `export type { Foo }` if declared locally) — missing exports break `tsc` in CI.
+- Product copy in UI/errors and tests must stay in sync (e.g. inbox is a “list”, not “project”).
+- Keep changes scoped; no drive-by refactors or unsolicited markdown docs.

@@ -1,0 +1,21 @@
+---
+description: TickTick sync — completed tasks, reminders, progress
+globs: electron/main/sync/**/*,electron/main/ticktick/**/*,tests/unit/ticktick/**/*,tests/unit/sync/**/*
+alwaysApply: false
+---
+
+# TickTick sync
+
+## Completions
+
+- Project `/data` pulls are **incomplete-only**. Remote completions need `POST /task/completed` (and/or completed list) plus a **capped** reconcile — never unbounded “vanish” scans that hang the UI.
+- Inbound reminder replace must use `preserveNotified: true` when matching kind+offset so a pull does not re-fire desktop notifications.
+
+## Progress UI
+
+- Sync progress totals must be **monotonic** (lock totals; clear only when done). Do not recalculate in a way that makes the bar go backwards or stick at almost-done.
+
+## Mappers
+
+- Keep reminder TRIGGER ↔ local `ReminderInput` and recurrence JSON round-trips covered by unit tests when changing formats.
+- Empty TickTick JSON responses are valid — treat as empty lists, not parse errors.

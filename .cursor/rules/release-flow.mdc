@@ -1,0 +1,40 @@
+---
+description: Release flow — version bumps and changelogs (never commit)
+alwaysApply: true
+---
+
+# Release flow
+
+## Branch model
+
+- Development happens on `main`.
+- Releases use a `release/X.Y.Z` branch (prerelease: `release/X.Y.Z-beta.N`), which CI publishes as GitHub Release tag `vX.Y.Z`.
+- Do **not** create or push a `release/*` branch unless the user explicitly asks.
+
+## Hard rule: never commit
+
+- Never run `git commit`, `git push`, or stage files for the user as part of release work.
+- Leave version and changelog edits as uncommitted working-tree changes for the user to review and commit.
+
+## When asked to update the project version
+
+1. Set `"version"` in `package.json` to the requested semver.
+2. Keep `package-lock.json` in sync (same top-level `version` / package entry).
+3. Do not bump version unless asked; confirm the target version if ambiguous.
+
+## When asked to write a changelog
+
+1. Find the previous release: prefer the latest git tag matching `v*`, else the latest `release/*` branch tip.
+2. Collect commits since that point: `git log <prev>..HEAD` (on the branch the user is releasing from, usually `main`).
+3. Write or update root `CHANGELOG.md` (Keep a Changelog style):
+   - New section `## [X.Y.Z] - YYYY-MM-DD` at the top (under any `# Changelog` title).
+   - Group user-facing notes under `### Added` / `### Changed` / `### Fixed` / `### Removed` as appropriate.
+   - Skip noise (merge commits, pure chore/CI/lint unless user-facing).
+   - Prefer clear release notes over raw commit subjects; use history as the source of truth.
+4. If `CHANGELOG.md` does not exist, create it with a short `# Changelog` header, then the new section.
+
+## Do only what was asked
+
+- Version bump alone → do not invent a changelog.
+- Changelog alone → do not bump version unless the section version is specified and files are inconsistent.
+- Both → do both, still without committing.

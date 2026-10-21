@@ -1,0 +1,24 @@
+---
+description: Vitest conventions — dates, migrations, ABI
+globs: tests/**/*.ts
+alwaysApply: false
+---
+
+# Tests
+
+## Environment
+
+- Vitest runs on **Node**. Do not electron-rebuild native modules for test runs (breaks ABI).
+- Prefer Node 20/22 for local test runs; bleeding-edge Node may fail to build `better-sqlite3`.
+
+## Assertions that bit us
+
+- **Dates:** compare with `.toISOString()` / fixed UTC strings — not `formatISO()` (local offset makes CI flake).
+- **Weekly recurrence:** pin `weekdays` to the due date’s local `getDay()`, not “today”.
+- **Migrations:** assert against `migrations.map(m => m.version)` (and idempotent re-run), not a hard-coded length of `1`.
+- **Ordering:** if timestamps can collide in the same ms, set distinct values before asserting order.
+- **Copy:** expect the real error/UI strings from repositories (e.g. “inbox list”).
+
+## Scope
+
+- Keep pure logic tests free of Electron APIs when possible; if importing main modules that load `electron`, ensure the tested exports are side-effect light or mockable.

@@ -1,0 +1,25 @@
+---
+description: Electron packaging, native ABI, Windows ICU/NSIS
+globs: electron-builder.yml,package.json,scripts/**/*,build/**/*.nsh,.github/workflows/**
+alwaysApply: false
+---
+
+# Packaging & native modules
+
+## better-sqlite3 ABI
+
+- **Vitest / CI** need the **Node** ABI. `postinstall` must skip `electron-rebuild` when `CI=true`.
+- **Packaged app** needs the **Electron** ABI. Package scripts run `rebuild:native` **before** electron-builder.
+- Never “fix” CI tests by rebuilding for Electron in `postinstall`.
+
+## electron-builder
+
+- Always `--publish never` (and `publish: null`). Releases upload via `.github/workflows/release.yml` (`softprops/action-gh-release`), not electron-builder publish (`GH_TOKEN`).
+- Windows PE for `better-sqlite3`: `scripts/beforePack.cjs` must leave a win32 `.node` (MZ), not Linux ELF, when packing `win32`.
+- Keep `asarUnpack` for `better-sqlite3` / `bindings` so Windows `require()` works.
+
+## Windows launch / ICU
+
+- Sandboxed Chromium children need AppContainer RX on the install tree or you get `Invalid file descriptor to ICU data received`.
+- NSIS `build/installer.nsh` grants `S-1-15-2-1` and `S-1-15-2-2` on `$INSTDIR` — do not remove without a replacement.
+- Prefer local install paths; network/OneDrive folders break ICU mmap.

@@ -5,7 +5,14 @@ import { getRepositories } from '../db/connection'
 import { getMainWindowRef, showMainWindow } from '../desktop/mainWindowRef'
 import { IPC_CHANNELS } from '@shared/channels'
 
-const POLL_MS = 30_000
+export const REMINDER_POLL_MS = 30_000
+/**
+ * Only show a desktop notification if the fire time is within this window of now.
+ * Older due reminders (app was closed, first enable, etc.) are marked silently —
+ * no catch-up spam on launch.
+ */
+export const REMINDER_NOTIFY_GRACE_MS = REMINDER_POLL_MS * 2
+
 let timer: ReturnType<typeof setInterval> | null = null
 
 interface DueReminderRow {
@@ -36,6 +43,16 @@ export function reminderFireAtMs(
   if (kind === 'after') return due + offsetMinutes * 60_000
   // before + at_due (offset 0)
   return due - offsetMinutes * 60_000
+}
+
+/** True only when fire time is due and still "now" (within grace). */
+export function shouldShowReminder(
+  fireAt: number,
+  now: number,
+  graceMs: number = REMINDER_NOTIFY_GRACE_MS,
+): boolean {
+  if (!Number.isFinite(fireAt) || fireAt > now) return false
+  return now - fireAt <= graceMs
 }
 
 function notificationBody(row: DueReminderRow, now: number, fireAt: number): string {
@@ -90,8 +107,9 @@ function pollReminders(): void {
   for (const row of rows) {
     const fireAt = reminderFireAtMs(row.due_date, row.kind, row.offset_minutes)
     if (!Number.isFinite(fireAt) || fireAt > now) continue
-    // Skip very old reminders (> 24h past fire) to avoid spam on first enable
-    if (now - fireAt > 24 * 60 * 60_000) {
+
+    // Missed while closed / stale — silence without notifying
+    if (!shouldShowReminder(fireAt, now)) {
       mark.run(new Date().toISOString(), row.reminder_id)
       continue
     }
@@ -124,7 +142,7 @@ function pollReminders(): void {
 export function startReminderScheduler(): void {
   stopReminderScheduler()
   pollReminders()
-  timer = setInterval(pollReminders, POLL_MS)
+  timer = setInterval(pollReminders, REMINDER_POLL_MS)
 }
 
 export function stopReminderScheduler(): void {
