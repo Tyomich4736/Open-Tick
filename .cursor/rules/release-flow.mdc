@@ -32,6 +32,7 @@ alwaysApply: true
    - Skip noise (merge commits, pure chore/CI/lint unless user-facing).
    - Prefer clear release notes over raw commit subjects; use history as the source of truth.
 4. If `CHANGELOG.md` does not exist, create it with a short `# Changelog` header, then the new section.
+5. The Release workflow copies the matching `## [X.Y.Z]` section into the GitHub Release body — that section **must** exist for version `X.Y.Z` or the release job fails.
 
 ## Do only what was asked
 

@@ -77,7 +77,7 @@ Push a `release/X.Y.Z` branch to build installers for Windows, macOS, and Linux 
 git checkout main
 git pull
 git checkout -b release/1.0.1
-# optional: bump notes / changelog, then:
+# CHANGELOG.md must have ## [1.0.1] (used as the GitHub Release body), then:
 git push -u github HEAD
 ```
 

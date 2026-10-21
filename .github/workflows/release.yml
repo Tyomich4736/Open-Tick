@@ -1,6 +1,7 @@
 # Build installers and publish a GitHub Release when you push a release branch.
 #
 #   git checkout -b release/1.0.1
+#   # CHANGELOG.md must include ## [1.0.1] — that section becomes the release body
 #   git push -u github HEAD
 #
 # Creates tag v1.0.1 and attaches Windows / macOS / Linux artifacts.
@@ -30,6 +31,7 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
       tag: ${{ steps.meta.outputs.tag }}
+      release_notes: ${{ steps.notes.outputs.release_notes }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +47,34 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Release version: $VERSION (tag v$VERSION)"
+
+      - name: Extract CHANGELOG section
+        id: notes
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          if [[ ! -f CHANGELOG.md ]]; then
+            echo "::error::CHANGELOG.md is missing; add a section for $VERSION before releasing"
+            exit 1
+          fi
+          # Keep a Changelog: ## [X.Y.Z] - YYYY-MM-DD … until next ## [
+          NOTES="$(awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md | sed -e 's/[[:space:]]*$//' | sed -e '/./,$!d')"
+          # trim trailing blank lines
+          NOTES="$(printf '%s\n' "$NOTES" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
+          if [[ -z "${NOTES// }" ]]; then
+            echo "::error::No CHANGELOG.md section for [$VERSION]; add '## [$VERSION] - YYYY-MM-DD' before releasing"
+            exit 1
+          fi
+          {
+            echo "release_notes<<EOF"
+            printf '%s\n' "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Extracted release notes for $VERSION:"
+          printf '%s\n' "$NOTES"
 
       - uses: actions/setup-node@v4
         with:
@@ -140,6 +170,26 @@ jobs:
       - name: List release files
         run: find artifacts -type f | sort
 
+      - name: Write release body from CHANGELOG
+        env:
+          RELEASE_NOTES: ${{ needs.prepare.outputs.release_notes }}
+        run: |
+          printf '%s\n\n' "$RELEASE_NOTES" > release-body.md
+          cat >> release-body.md <<'EOF'
+          ---
+
+          | Platform | Artifact |
+          |----------|----------|
+          | Windows | `Open Tick-*-win-x64.exe` (NSIS) |
+          | macOS | `Open Tick-*-mac-*.dmg` (unsigned) |
+          | Linux | `open-tick-*-linux-x64.AppImage` / `.deb` |
+
+          **macOS:** DMG is not notarized — right-click → Open the first time, or remove the quarantine flag.
+          **Linux AppImage:** may need `chmod +x` after download.
+          EOF
+          echo '---- release-body.md ----'
+          cat release-body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -147,22 +197,9 @@ jobs:
           name: Open Tick ${{ needs.prepare.outputs.version }}
           draft: false
           prerelease: ${{ contains(needs.prepare.outputs.version, '-') }}
-          generate_release_notes: true
+          generate_release_notes: false
           fail_on_unmatched_files: true
           files: artifacts/*
-          body: |
-            ## Open Tick ${{ needs.prepare.outputs.version }}
-
-            Built from branch `${{ github.ref_name }}` (`${{ github.sha }}`).
-
-            | Platform | Artifact |
-            |----------|----------|
-            | Windows | `Open Tick-*-win-x64.exe` (NSIS) |
-            | macOS | `Open Tick-*-mac-*.dmg` (unsigned) |
-            | Linux | `open-tick-*-linux-x64.AppImage` / `.deb` |
-
-            ### Notes
-            - **macOS:** the DMG is not notarized. Right-click → Open the first time, or remove the quarantine flag.
-            - **Linux AppImage:** may need `chmod +x` after download.
+          body_path: release-body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
