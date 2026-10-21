@@ -23,3 +23,8 @@ alwaysApply: false
 - Sandboxed Chromium children need AppContainer RX on the install tree or you get `Invalid file descriptor to ICU data received`.
 - NSIS `build/installer.nsh` grants `S-1-15-2-1` and `S-1-15-2-2` on `$INSTDIR` — do not remove without a replacement.
 - Prefer local install paths; network/OneDrive folders break ICU mmap.
+
+## Linux AppImage autostart
+
+- `app.setLoginItemSettings` is **macOS/Windows only**. Linux uses XDG `~/.config/autostart/open-tick.desktop` (`linuxAutostart.ts`).
+- Exec must be `$APPIMAGE` when set — never the FUSE mount `process.execPath`.

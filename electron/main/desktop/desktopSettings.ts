@@ -7,6 +7,7 @@ import { getRepositories } from '../db/connection'
 import { openQuickCaptureWindow } from '../windows/quickCaptureWindow'
 import { requestNewSticky } from './stickyActions'
 import { getMainWindowRef } from './mainWindowRef'
+import { applyLinuxAutoStart } from './linuxAutostart'
 import { IPC_CHANNELS } from '@shared/channels'
 
 let registeredShortcuts: string[] = []
@@ -15,6 +16,14 @@ export function applyAutoStart(): void {
   const enabled =
     getRepositories().settings.get<boolean>(DESKTOP_SETTING_KEYS.autoStart) ??
     DESKTOP_DEFAULTS.autoStart
+
+  if (process.platform === 'linux') {
+    // Electron setLoginItemSettings is macOS/Windows only; Linux needs XDG autostart.
+    // AppImage: use $APPIMAGE (see linuxAutostart.ts), not the FUSE mount execPath.
+    applyLinuxAutoStart(enabled)
+    return
+  }
+
   app.setLoginItemSettings({
     openAtLogin: enabled,
     path: process.execPath,
@@ -81,7 +90,20 @@ export function registerGlobalShortcuts(): { errors: string[] } {
 }
 
 export function applyDesktopSettings(): { errors: string[] } {
-  applyAutoStart()
+  try {
+    applyAutoStart()
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to update start-with-system setting'
+    const main = getMainWindowRef()
+    if (main && !main.isDestroyed()) {
+      main.webContents.send(IPC_CHANNELS.DESKTOP_TOAST, {
+        type: 'error',
+        message,
+      })
+    }
+    return { errors: [message, ...registerGlobalShortcuts().errors] }
+  }
   return registerGlobalShortcuts()
 }
 
