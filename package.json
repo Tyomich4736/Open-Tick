@@ -43,7 +43,7 @@
     "@tiptap/pm": "^3.30.5",
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.11.1",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.6.1",
@@ -80,7 +80,7 @@
   },
   "allowScripts": {
     "electron@35.7.5": true,
-    "better-sqlite3@11.10.0": true,
+    "better-sqlite3@12.11.1": true,
     "esbuild@0.25.12": true
   }
 }

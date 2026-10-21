@@ -1,0 +1,25 @@
+---
+description: Run lint and tests after code changes
+alwaysApply: true
+---
+
+# Verify after changes
+
+After finishing a batch of code edits (not after every single keystroke/tool call), run quality gates before considering the task done.
+
+## Commands
+
+```bash
+npm run lint
+npm test
+```
+
+- Prefer `CI=true` when installing or rebuilding natives so Vitest keeps the Node ABI.
+- If only docs/rules/markdown changed, skip tests; still run lint if JS/TS/config was touched.
+- If changes are isolated to one area, you may run a focused test first (`npm test -- tests/unit/…`), then full `npm test` before finishing.
+- Fix failures you introduced before handing off; do not leave red lint/tests.
+
+## Do not
+
+- Skip verification because the change “looks small” if it touches runtime or test code.
+- Commit as part of verification unless the user asked to commit.

@@ -9,7 +9,8 @@ alwaysApply: false
 ## Environment
 
 - Vitest runs on **Node**. Do not electron-rebuild native modules for test runs (breaks ABI).
-- Prefer Node 20/22 for local test runs; bleeding-edge Node may fail to build `better-sqlite3`.
+- CI uses Node **22**. Local Node must match the ABI of `better-sqlite3` (`npm rebuild better-sqlite3` after switching major Node versions).
+- `better-sqlite3` **12.x** is required for Node 25/26; keep `allowScripts["better-sqlite3@…"]` in sync with the installed version so install scripts are not blocked.
 
 ## Assertions that bit us
 
