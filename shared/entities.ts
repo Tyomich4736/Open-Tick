@@ -89,6 +89,7 @@ export interface TaskListItem {
   tags: string[]
   subtask_count: number
   completed_subtask_count: number
+  created_at: string
   /** Present when list query includes recurrence (calendar expansion). */
   recurrence_rule?: RecurrenceRule | null
   /**

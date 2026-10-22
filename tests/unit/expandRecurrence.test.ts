@@ -19,6 +19,7 @@ function baseTask(overrides: Partial<TaskListItem> = {}): TaskListItem {
     tags: [],
     subtask_count: 0,
     completed_subtask_count: 0,
+    created_at: '2026-08-01T10:00:00.000Z',
     recurrence_rule: defaultRecurrence('daily'),
     ...overrides,
   }

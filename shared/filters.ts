@@ -2,6 +2,9 @@ import type { TaskStatus } from './entities'
 
 export type TaskSortMode = 'order' | 'due_date' | 'title' | 'priority'
 
+/** How root tasks are sectioned in the list view. */
+export type TaskGroupBy = 'none' | 'date' | 'list' | 'tag' | 'priority'
+
 export type SmartListId = 'inbox' | 'today' | 'tomorrow' | 'week' | 'overdue' | 'completed'
 
 export interface TaskFilter {
@@ -33,6 +36,14 @@ export const TASK_SORT_OPTIONS: { value: TaskSortMode; label: string }[] = [
   { value: 'priority', label: 'Priority' },
 ]
 
+export const TASK_GROUP_BY_OPTIONS: { value: TaskGroupBy; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'date', label: 'Date' },
+  { value: 'list', label: 'List' },
+  { value: 'tag', label: 'Tag' },
+  { value: 'priority', label: 'Priority' },
+]
+
 export function defaultSortForView(smartList?: SmartListId | null): TaskSortMode {
   if (!smartList) return 'order'
   switch (smartList) {
@@ -54,6 +65,20 @@ export function listSortSettingKey(scope: string): string {
 
 export function listShowCompletedSettingKey(scope: string): string {
   return `list_show_completed.${scope}`
+}
+
+export function listGroupBySettingKey(scope: string): string {
+  return `list_group_by.${scope}`
+}
+
+export function defaultGroupByForView(): TaskGroupBy {
+  return 'none'
+}
+
+/** Group-by modes available for this view (list only inside smart lists). */
+export function groupByOptionsForView(viewKind: 'smart' | 'project' | 'tag'): typeof TASK_GROUP_BY_OPTIONS {
+  if (viewKind === 'smart') return TASK_GROUP_BY_OPTIONS
+  return TASK_GROUP_BY_OPTIONS.filter((opt) => opt.value !== 'list')
 }
 
 export function viewSortScope(

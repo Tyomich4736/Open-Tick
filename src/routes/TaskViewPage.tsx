@@ -12,9 +12,10 @@ import {
   useTaskSelectionStore,
 } from '@/stores/taskSelectionStore'
 import { ipc } from '@/lib/ipc-client'
+import { groupByOptionsForView } from '@shared/filters'
 import { QuickAdd } from '@/components/tasks/QuickAdd'
-import { ShowCompletedToggle, SortPicker } from '@/components/tasks/SortPicker'
 import { TaskList } from '@/components/tasks/TaskList'
+import { ViewSettingsButton } from '@/components/tasks/ViewSettingsButton'
 import { ViewModeSwitcher } from '@/components/calendar/ViewModeSwitcher'
 
 interface TaskViewPageProps {
@@ -38,7 +39,8 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
   const location = useLocation()
   const scope = viewSortScope(view)
   const smartList = view.kind === 'smart' ? view.smart_list : null
-  const { sort, showCompleted, setSort, setShowCompleted } = useListPreferences(scope, smartList)
+  const { sort, showCompleted, groupBy, setSort, setShowCompleted, setGroupBy } =
+    useListPreferences(scope, smartList, { allowListGroup: view.kind === 'smart' })
 
   const filter = useMemo(
     () =>
@@ -137,10 +139,19 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
           <p className="mt-0.5 text-sm text-text-muted">{view.description}</p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {canShowCompletedToggle && (
-            <ShowCompletedToggle checked={showCompleted} onChange={setShowCompleted} />
+          {!isCompletedView && (
+            <ViewSettingsButton
+              sort={sort}
+              onSortChange={setSort}
+              showSort
+              showCompleted={showCompleted}
+              onShowCompletedChange={setShowCompleted}
+              showCompletedToggle={canShowCompletedToggle}
+              groupBy={groupBy}
+              onGroupByChange={setGroupBy}
+              groupByOptions={groupByOptionsForView(view.kind)}
+            />
           )}
-          {!isCompletedView && <SortPicker value={sort} onChange={setSort} />}
           <ViewModeSwitcher listPath={location.pathname} />
         </div>
       </header>
@@ -165,9 +176,10 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
       <div className="flex-1 overflow-y-auto">
         <TaskList
           filter={filter}
-          allowReorder={!isCompletedView && sort === 'order'}
+          allowReorder={!isCompletedView && sort === 'order' && groupBy === 'none'}
           emptyTitle={empty.title}
           emptyDescription={empty.description}
+          groupBy={isCompletedView ? 'none' : groupBy}
         />
       </div>
     </div>

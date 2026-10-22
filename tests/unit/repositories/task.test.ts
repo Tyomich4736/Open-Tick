@@ -89,6 +89,48 @@ describe('TaskRepository', () => {
     expect(todayTasks.map((t) => t.title)).toEqual(['Late', 'Due today'])
   })
 
+  it('today show-completed keeps overdue pending but not old completed', () => {
+    const inbox = repos.projects.ensureInbox()
+    const today = formatISO(new Date())
+    const yesterday = formatISO(new Date(Date.now() - 24 * 60 * 60 * 1000))
+    const lastWeek = formatISO(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+
+    repos.tasks.create({ title: 'Due today', project_id: inbox.id, due_date: today })
+    repos.tasks.create({
+      title: 'Overdue open',
+      project_id: inbox.id,
+      due_date: yesterday,
+    })
+    const overdueDone = repos.tasks.create({
+      title: 'Old overdue done',
+      project_id: inbox.id,
+      due_date: lastWeek,
+    })
+    repos.tasks.complete(overdueDone.id)
+    // Completed last week (not today) — must not appear in Today when show-completed is on.
+    repos.db
+      .prepare(`UPDATE tasks SET completed_at = ? WHERE id = ?`)
+      .run(lastWeek, overdueDone.id)
+
+    const doneToday = repos.tasks.create({
+      title: 'Done today',
+      project_id: inbox.id,
+      due_date: yesterday,
+    })
+    repos.tasks.complete(doneToday.id)
+
+    const withCompleted = repos.tasks.list({
+      smart_list: 'today',
+      include_completed: true,
+      sort: 'due_date',
+    })
+    const titles = withCompleted.map((t) => t.title).sort()
+    expect(titles).toContain('Due today')
+    expect(titles).toContain('Overdue open')
+    expect(titles).toContain('Done today')
+    expect(titles).not.toContain('Old overdue done')
+  })
+
   it('filters overdue tasks', () => {
     const inbox = repos.projects.ensureInbox()
     const yesterday = formatISO(new Date(Date.now() - 24 * 60 * 60 * 1000))

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { CheckSquare } from 'lucide-react'
-import type { TaskFilter } from '@shared/filters'
+import type { TaskFilter, TaskGroupBy } from '@shared/filters'
 import type { TaskListItem } from '@shared/entities'
+import { groupTasks } from '@shared/taskGroups'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
 import { useListDensity } from '@/hooks/useLayoutSettings'
 import { useTimeFormat } from '@/hooks/useTimeFormat'
@@ -26,6 +27,8 @@ interface TaskListProps {
   emptyDescription?: string
   /** When false, render nothing for an empty list (used under section headers). */
   showEmptyState?: boolean
+  /** Section roots by date / list / tag / etc. */
+  groupBy?: TaskGroupBy
 }
 
 export function TaskList({
@@ -34,6 +37,7 @@ export function TaskList({
   emptyTitle = 'No tasks here',
   emptyDescription = 'Add a task above to get started',
   showEmptyState = true,
+  groupBy = 'none',
 }: TaskListProps) {
   const { toggleComplete } = useTaskMutations()
   const selectOne = useTaskSelectionStore((s) => s.selectOne)
@@ -89,7 +93,14 @@ export function TaskList({
       (listRef.current?.closest('.overflow-y-auto') as HTMLElement | null) ?? null
   })
 
-  const useVirtual = flatItems.length >= TASK_LIST_VIRTUALIZE_THRESHOLD
+  const grouping = groupBy !== 'none'
+  const groups = useMemo(
+    () => (grouping ? groupTasks(visibleRootTasks, groupBy) : null),
+    [grouping, visibleRootTasks, groupBy],
+  )
+
+  // Virtualization skips section headers; keep grouped lists in the simple path.
+  const useVirtual = !grouping && flatItems.length >= TASK_LIST_VIRTUALIZE_THRESHOLD
 
   const virtualizer = useVirtualizer({
     count: flatItems.length,
@@ -258,6 +269,28 @@ export function TaskList({
               </div>
             )
           })}
+        </div>
+      ) : groups ? (
+        <div className="pb-4">
+          {groups.map((group) => (
+            <section key={group.key} className="pt-2">
+              {group.label ? (
+                <h3 className="sticky top-0 z-10 bg-bg-primary/95 px-6 py-2 text-xs font-semibold tracking-wide text-text-muted uppercase backdrop-blur-sm">
+                  {group.label}
+                </h3>
+              ) : null}
+              {group.tasks.map((task) => renderTaskNode(task, 0))}
+            </section>
+          ))}
+          {hasMoreRoots && (
+            <button
+              type="button"
+              onClick={() => setVisibleRootCount((n) => n + TASK_LIST_PAGE_SIZE)}
+              className="w-full px-4 py-3 text-center text-sm font-medium text-accent hover:bg-accent/5"
+            >
+              Show more ({rootTasks.length - visibleRootCount} remaining)
+            </button>
+          )}
         </div>
       ) : (
         <>

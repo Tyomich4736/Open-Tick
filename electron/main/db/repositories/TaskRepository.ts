@@ -68,6 +68,7 @@ interface TaskListRow {
   project_is_inbox: number
   subtask_count: number
   completed_subtask_count: number
+  created_at: string
   recurrence_rule: string | null
 }
 
@@ -833,7 +834,7 @@ export class TaskRepository {
       .prepare(
         `SELECT
           t.id, t.title, t.status, t.priority, t.due_date, t.start_date, t.is_all_day,
-          t.project_id, t.recurrence_rule,
+          t.project_id, t.created_at, t.recurrence_rule,
           p.name as project_name, p.color as project_color, p.is_inbox as project_is_inbox,
           COALESCE(sc.subtask_count, 0) as subtask_count,
           COALESCE(sc.completed_subtask_count, 0) as completed_subtask_count
@@ -873,6 +874,7 @@ export class TaskRepository {
       tags: tagsByTask.get(row.id) ?? [],
       subtask_count: row.subtask_count,
       completed_subtask_count: row.completed_subtask_count,
+      created_at: row.created_at,
       recurrence_rule: parseRecurrence(row.recurrence_rule),
     }))
   }
@@ -978,23 +980,49 @@ export class TaskRepository {
             clauses.push("t.status = 'pending'")
           }
           break
-        case 'today':
-          // Overlaps today, or already overdue (past due before today).
-          // Bounds are UTC Z so they compare safely with stored due_date ISO strings.
-          clauses.push('t.due_date IS NOT NULL')
-          clauses.push(`(
-            (COALESCE(t.start_date, t.due_date) <= ? AND t.due_date >= ?)
-            OR t.due_date < ?
-          )`)
-          params.push(
-            instantToFilterIso(todayEnd),
-            instantToFilterIso(todayStart),
-            instantToFilterIso(todayStart),
-          )
-          if (filter.include_completed !== true) {
+        case 'today': {
+          // Pending: due today (overlap) or overdue.
+          // Completed (when shown): due today, or completed today — not historical overdue.
+          const todayStartIso = instantToFilterIso(todayStart)
+          const todayEndIso = instantToFilterIso(todayEnd)
+          const overlapsToday =
+            '(COALESCE(t.start_date, t.due_date) <= ? AND t.due_date >= ?)'
+          if (filter.include_completed === true) {
+            clauses.push(`(
+              (
+                t.status = 'pending'
+                AND t.due_date IS NOT NULL
+                AND (${overlapsToday} OR t.due_date < ?)
+              )
+              OR (
+                t.status = 'completed'
+                AND (
+                  (t.due_date IS NOT NULL AND ${overlapsToday})
+                  OR (
+                    t.completed_at IS NOT NULL
+                    AND t.completed_at >= ?
+                    AND t.completed_at <= ?
+                  )
+                )
+              )
+            )`)
+            params.push(
+              todayEndIso,
+              todayStartIso,
+              todayStartIso,
+              todayEndIso,
+              todayStartIso,
+              todayStartIso,
+              todayEndIso,
+            )
+          } else {
+            clauses.push('t.due_date IS NOT NULL')
+            clauses.push(`(${overlapsToday} OR t.due_date < ?)`)
+            params.push(todayEndIso, todayStartIso, todayStartIso)
             clauses.push("t.status = 'pending'")
           }
           break
+        }
         case 'tomorrow':
           clauses.push('t.due_date IS NOT NULL')
           clauses.push('COALESCE(t.start_date, t.due_date) <= ?')
