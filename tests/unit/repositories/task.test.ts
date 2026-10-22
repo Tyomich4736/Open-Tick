@@ -16,6 +16,20 @@ describe('TaskRepository', () => {
     if (repos?.db) closeDatabaseInstance(repos.db)
   })
 
+  it('lists pending sync summary for unpushed tasks', () => {
+    const inbox = repos.projects.ensureInbox()
+    const created = repos.tasks.create({ title: 'Local only', project_id: inbox.id })
+    const updated = repos.tasks.create({ title: 'Will edit', project_id: inbox.id })
+    repos.tasks.markSynced(updated.id, 'remote-1')
+    repos.tasks.update(updated.id, { title: 'Edited locally' })
+
+    const pending = repos.tasks.listPendingSyncSummary()
+    expect(pending.map((t) => t.id).sort()).toEqual([created.id, updated.id].sort())
+    expect(pending.find((t) => t.id === created.id)?.sync_status).toBe('pending_create')
+    expect(pending.find((t) => t.id === updated.id)?.sync_status).toBe('pending_update')
+    expect(pending.find((t) => t.id === created.id)?.project_is_inbox).toBe(true)
+  })
+
   it('creates, updates, completes, and deletes tasks', () => {
     const inbox = repos.projects.ensureInbox()
     const task = repos.tasks.create({ title: 'Buy milk', project_id: inbox.id })

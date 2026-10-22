@@ -648,6 +648,52 @@ export class TaskRepository {
     return rows.map(mapTask)
   }
 
+  /** UI summary for Integration panel — roots first, then subtasks. */
+  listPendingSyncSummary(): Array<{
+    id: string
+    title: string
+    sync_status: 'pending_create' | 'pending_update' | 'pending_delete'
+    project_id: string
+    project_name: string
+    project_is_inbox: boolean
+    deleted: boolean
+  }> {
+    const rows = this.db
+      .prepare(
+        `SELECT
+           t.id,
+           t.title,
+           t.sync_status,
+           t.project_id,
+           t.deleted_at,
+           p.name as project_name,
+           p.is_inbox as project_is_inbox
+         FROM tasks t
+         INNER JOIN projects p ON p.id = t.project_id
+         WHERE t.sync_status IN ('pending_create', 'pending_update', 'pending_delete')
+         ORDER BY t.parent_id IS NOT NULL ASC, t.updated_at DESC`,
+      )
+      .all() as Array<{
+      id: string
+      title: string
+      sync_status: 'pending_create' | 'pending_update' | 'pending_delete'
+      project_id: string
+      deleted_at: string | null
+      project_name: string
+      project_is_inbox: number
+    }>
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title.trim() || 'Untitled',
+      sync_status: row.sync_status,
+      project_id: row.project_id,
+      project_name: row.project_name,
+      project_is_inbox: asBool(row.project_is_inbox),
+      deleted: row.deleted_at != null || row.sync_status === 'pending_delete',
+    }))
+  }
+
   markSynced(id: string, remoteId?: string | null): void {
     const now = nowIso()
     if (remoteId) {

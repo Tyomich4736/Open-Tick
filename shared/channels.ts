@@ -60,6 +60,7 @@ export const IPC_CHANNELS = {
 
   SYNC_CHANGED: 'sync:changed',
   SYNC_GET_STATUS: 'sync:getStatus',
+  SYNC_LIST_PENDING_TASKS: 'sync:listPendingTasks',
   SYNC_NOW: 'sync:now',
   SYNC_PUSH: 'sync:push',
   SYNC_FULL_RESET_AND_PULL: 'sync:fullResetAndPull',

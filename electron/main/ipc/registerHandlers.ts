@@ -13,6 +13,7 @@ import {
 import {
   handleSyncFullResetAndPull,
   handleSyncGetStatus,
+  handleSyncListPendingTasks,
   handleSyncNow,
   handleSyncPush,
 } from './handlers/sync'
@@ -174,6 +175,7 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle(IPC_CHANNELS.SYNC_GET_STATUS, () => handleSyncGetStatus())
+  ipcMain.handle(IPC_CHANNELS.SYNC_LIST_PENDING_TASKS, () => handleSyncListPendingTasks())
   ipcMain.handle(IPC_CHANNELS.SYNC_NOW, () => handleSyncNow())
   ipcMain.handle(IPC_CHANNELS.SYNC_PUSH, () => handleSyncPush())
   ipcMain.handle(IPC_CHANNELS.SYNC_FULL_RESET_AND_PULL, () => handleSyncFullResetAndPull())

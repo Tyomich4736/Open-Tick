@@ -22,14 +22,24 @@ import type {
   UpdateTaskInput,
 } from './entities'
 import type { TaskFilter } from './filters'
-import type { SyncProgressEvent, SyncPullResult, SyncStatusDto } from './sync'
+import type {
+  PendingSyncTask,
+  SyncProgressEvent,
+  SyncPullResult,
+  SyncStatusDto,
+} from './sync'
 import type {
   TickTickCredentialsInput,
   TickTickCredentialsPublic,
 } from './ticktickCredentials'
 
 export type { AuthStatus } from './auth'
-export type { SyncProgressEvent, SyncPullResult, SyncStatusDto } from './sync'
+export type {
+  PendingSyncTask,
+  SyncProgressEvent,
+  SyncPullResult,
+  SyncStatusDto,
+} from './sync'
 export type { TickTickCredentialsInput, TickTickCredentialsPublic } from './ticktickCredentials'
 
 export type IpcResult<T> =
@@ -126,6 +136,7 @@ export interface TickTickApi {
 
   sync: {
     getStatus: () => Promise<IpcResult<SyncStatusDto>>
+    listPendingTasks: () => Promise<IpcResult<PendingSyncTask[]>>
     now: () => Promise<IpcResult<SyncPullResult>>
     push: () => Promise<IpcResult<{ ran: boolean; processed: number; errors: string[] }>>
     fullResetAndPull: () => Promise<IpcResult<SyncPullResult>>

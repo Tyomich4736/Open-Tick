@@ -7,6 +7,18 @@ export interface SyncPendingPush {
   folders: number
 }
 
+/** Lightweight row for Integration panel “unpushed tasks” list. */
+export interface PendingSyncTask {
+  id: string
+  title: string
+  sync_status: 'pending_create' | 'pending_update' | 'pending_delete'
+  project_id: string
+  project_name: string
+  project_is_inbox: boolean
+  /** Soft-deleted locally (usually pending_delete). */
+  deleted: boolean
+}
+
 export interface SyncPullStats {
   folders: number
   projects: number

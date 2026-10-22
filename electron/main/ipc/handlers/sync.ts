@@ -1,4 +1,9 @@
-import type { SyncProgressEvent, SyncPullResult, SyncStatusDto } from '@shared/sync'
+import type {
+  PendingSyncTask,
+  SyncProgressEvent,
+  SyncPullResult,
+  SyncStatusDto,
+} from '@shared/sync'
 import { getSyncEngine } from '../../sync/SyncEngine'
 import { getRepositories } from '../../db/connection'
 import { runIpcHandler, runIpcHandlerAsync } from '../ipcWrapper'
@@ -6,6 +11,10 @@ import { notifySyncComplete } from '../notify'
 
 export function handleSyncGetStatus() {
   return runIpcHandler((): SyncStatusDto => getSyncEngine().getStatus())
+}
+
+export function handleSyncListPendingTasks() {
+  return runIpcHandler((): PendingSyncTask[] => getRepositories().tasks.listPendingSyncSummary())
 }
 
 export async function handleSyncNow() {

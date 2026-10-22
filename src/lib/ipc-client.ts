@@ -103,6 +103,7 @@ export const ipc = {
   },
   sync: {
     getStatus: () => getApi().sync.getStatus(),
+    listPendingTasks: () => getApi().sync.listPendingTasks(),
     now: () => getApi().sync.now(),
     push: () => getApi().sync.push(),
     fullResetAndPull: () => getApi().sync.fullResetAndPull(),

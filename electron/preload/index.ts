@@ -86,6 +86,7 @@ const api: TickTickApi = {
 
   sync: {
     getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC_GET_STATUS),
+    listPendingTasks: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC_LIST_PENDING_TASKS),
     now: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC_NOW),
     push: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC_PUSH),
     fullResetAndPull: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC_FULL_RESET_AND_PULL),
