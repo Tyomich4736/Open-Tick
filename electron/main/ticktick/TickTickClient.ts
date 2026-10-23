@@ -295,6 +295,36 @@ export class TickTickClient {
     return this.request<void>('DELETE', `/project/group/${encodeURIComponent(groupRemoteId)}`)
   }
 
+  /** POST /project/{projectId}/column — create section */
+  async createColumn(projectRemoteId: string, payload: unknown): Promise<unknown> {
+    return this.request<unknown>(
+      'POST',
+      `/project/${encodeURIComponent(projectRemoteId)}/column`,
+      payload,
+    )
+  }
+
+  /** POST /project/{projectId}/column/{columnId} — update section */
+  async updateColumn(
+    projectRemoteId: string,
+    columnRemoteId: string,
+    payload: unknown,
+  ): Promise<unknown> {
+    return this.request<unknown>(
+      'POST',
+      `/project/${encodeURIComponent(projectRemoteId)}/column/${encodeURIComponent(columnRemoteId)}`,
+      payload,
+    )
+  }
+
+  /** DELETE /project/{projectId}/column/{columnId} — may 404 on some accounts */
+  async deleteColumn(projectRemoteId: string, columnRemoteId: string): Promise<void> {
+    return this.request<void>(
+      'DELETE',
+      `/project/${encodeURIComponent(projectRemoteId)}/column/${encodeURIComponent(columnRemoteId)}`,
+    )
+  }
+
   /** POST /task/move — move task between projects */
   async moveTask(payload: {
     taskId: string

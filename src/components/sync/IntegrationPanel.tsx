@@ -143,7 +143,7 @@ export function IntegrationPanel() {
     if (!open) return
     void refreshPendingTasks()
     const unsub = ipc.onChanged((notif) => {
-      if (['task', 'project', 'folder'].includes(notif.entityType)) {
+      if (['task', 'project', 'folder', 'section'].includes(notif.entityType)) {
         void refreshPendingTasks()
       }
     })
@@ -302,6 +302,9 @@ export function IntegrationPanel() {
                 <p className="mt-0.5 text-sm">
                   {status.pendingPush.total} changes · {status.pendingPush.tasks} tasks ·{' '}
                   {status.pendingPush.projects} lists · {status.pendingPush.folders} folders
+                  {(status.pendingPush.sections ?? 0) > 0
+                    ? ` · ${status.pendingPush.sections} sections`
+                    : ''}
                 </p>
               </div>
             )}

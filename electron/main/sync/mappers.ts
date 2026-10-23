@@ -2,7 +2,12 @@ import type { Priority, ProjectViewMode } from '@shared/entities'
 import { preserveMarkdownBlankLines, toTickTickContent } from '@shared/markdownBlankLines'
 import type { RecurrenceRule, ReminderInput } from '@shared/recurrence'
 import { normalizeAllDayInstant, toUtcIso } from '@shared/taskDates'
-import type { RemoteProject, RemoteProjectGroup, RemoteTask } from '../ticktick/remoteTypes'
+import type {
+  RemoteColumn,
+  RemoteProject,
+  RemoteProjectGroup,
+  RemoteTask,
+} from '../ticktick/remoteTypes'
 
 export function mapRemotePriority(value: number | undefined): Priority {
   if (value === 1 || value === 3 || value === 5) return value
@@ -171,6 +176,7 @@ export interface MappedTask {
   remote_id: string
   project_remote_id: string
   parent_remote_id: string | null
+  column_remote_id: string | null
   title: string
   content: string
   priority: Priority
@@ -187,6 +193,24 @@ export interface MappedTask {
   completed_at: string | null
 }
 
+export interface MappedSection {
+  remote_id: string
+  project_remote_id: string | null
+  name: string
+  sort_order: number
+  remote_updated_at: string | null
+}
+
+export function remoteColumnToLocal(remote: RemoteColumn): MappedSection {
+  return {
+    remote_id: remote.id,
+    project_remote_id: remote.projectId ?? null,
+    name: (remote.name ?? '').trim() || 'Untitled',
+    sort_order: typeof remote.sortOrder === 'number' ? remote.sortOrder : 0,
+    remote_updated_at: null,
+  }
+}
+
 export function remoteTaskToLocal(remote: RemoteTask): MappedTask {
   const isAllDay = Boolean(remote.isAllDay)
   const { due_date, start_date } = normalizeRemoteSchedule(
@@ -200,6 +224,7 @@ export function remoteTaskToLocal(remote: RemoteTask): MappedTask {
     remote_id: remote.id,
     project_remote_id: remote.projectId,
     parent_remote_id: remote.parentId ?? null,
+    column_remote_id: remote.columnId ?? null,
     title: (remote.title ?? '').trim() || 'Untitled',
     content: preserveMarkdownBlankLines(remote.content ?? remote.desc ?? ''),
     priority: mapRemotePriority(remote.priority),
@@ -329,11 +354,22 @@ export function localProjectToRemote(project: {
   return payload
 }
 
+export function localSectionToRemote(input: {
+  name: string
+  sort_order: number
+}): Record<string, unknown> {
+  return {
+    name: input.name,
+    sortOrder: input.sort_order,
+  }
+}
+
 export function localTaskToRemote(input: {
   title: string
   content: string
   projectRemoteId: string
   parentRemoteId?: string | null
+  columnRemoteId?: string | null
   priority: Priority
   status: 'pending' | 'completed'
   due_date: string | null
@@ -356,6 +392,8 @@ export function localTaskToRemote(input: {
     kind: 'TEXT',
   }
   if (input.parentRemoteId) payload.parentId = input.parentRemoteId
+  // Always send columnId (including null) so clearing a section syncs to TickTick
+  payload.columnId = input.columnRemoteId ?? null
   if (input.due_date) payload.dueDate = input.due_date
   if (input.start_date) payload.startDate = input.start_date
   if (input.time_zone) payload.timeZone = input.time_zone

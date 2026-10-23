@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useViewportMenuPosition } from '@/hooks/useViewportMenuPosition'
 import { useUiStore } from '@/stores/uiStore'
 
-export type TaskMenuSubmenu = 'date' | 'priority' | 'tags' | 'move' | null
+export type TaskMenuSubmenu = 'date' | 'priority' | 'tags' | 'move' | 'section' | null
 
 interface TaskActionMenuShellProps {
   open: boolean

@@ -13,7 +13,7 @@ const emptyStatus: SyncStatusDto = {
   lastError: null,
   lastErrorAt: null,
   pushEnabled: false,
-  pendingPush: { total: 0, tasks: 0, projects: 0, folders: 0 },
+  pendingPush: { total: 0, tasks: 0, projects: 0, folders: 0, sections: 0 },
   conflicts: 0,
   currentOperation: null,
   autoSyncIntervalMinutes: 3,
@@ -62,7 +62,7 @@ export function useSyncStatus() {
       }
     })
     const unsubChanged = ipc.onChanged((notif) => {
-      if (['task', 'project', 'folder'].includes(notif.entityType)) {
+      if (['task', 'project', 'folder', 'section'].includes(notif.entityType)) {
         void refresh()
       }
     })

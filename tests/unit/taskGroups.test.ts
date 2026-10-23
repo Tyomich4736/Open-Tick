@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskListItem } from '../../shared/entities'
-import { groupTasks } from '../../shared/taskGroups'
+import { groupTasks, groupTasksBySection } from '../../shared/taskGroups'
 
 function task(overrides: Partial<TaskListItem>): TaskListItem {
   return {
@@ -15,6 +15,9 @@ function task(overrides: Partial<TaskListItem>): TaskListItem {
     project_name: 'Work',
     project_color: '#4772FA',
     project_is_inbox: false,
+    section_id: null,
+    section_name: null,
+    section_sort: null,
     tags: [],
     subtask_count: 0,
     completed_subtask_count: 0,
@@ -77,5 +80,34 @@ describe('groupTasks', () => {
     const groups = groupTasks(items, 'date')
     expect(groups.at(-1)?.label).toBe('No date')
     expect(groups.at(-1)?.tasks[0].id).toBe('undated')
+  })
+
+  it('groupTasksBySection keeps empty sections; null tasks join Not Sectioned', () => {
+    const items = [
+      task({
+        id: 'a',
+        section_id: 's2',
+        section_name: 'Doing',
+        section_sort: 1,
+      }),
+      task({ id: 'b', section_id: null }),
+    ]
+    const groups = groupTasksBySection(items, [
+      { id: 's0', name: 'Not Sectioned', sort_order: -1, is_default: true },
+      { id: 's1', name: 'Todo', sort_order: 0, is_default: false },
+      { id: 's2', name: 'Doing', sort_order: 1, is_default: false },
+    ])
+    expect(groups.map((g) => g.label)).toEqual(['Not Sectioned', 'Todo', 'Doing'])
+    expect(groups[0].tasks[0].id).toBe('b')
+    expect(groups[1].tasks).toHaveLength(0)
+    expect(groups[2].tasks[0].id).toBe('a')
+  })
+
+  it('groupTasksBySection does not drop null tasks when default is missing', () => {
+    const items = [task({ id: 'lost', section_id: null })]
+    const groups = groupTasksBySection(items, [
+      { id: 's1', name: 'Doing', sort_order: 0, is_default: false },
+    ])
+    expect(groups.some((g) => g.tasks.some((t) => t.id === 'lost'))).toBe(true)
   })
 })

@@ -65,6 +65,7 @@ describe('sync mappers', () => {
       dueDate: '2026-09-03T10:00:00+03:00',
       startDate: '2026-09-03T09:00:00+03:00',
       isAllDay: false,
+      columnId: 'col-abc',
       tags: ['errands'],
       reminders: ['TRIGGER:-PT30M'],
       repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=FR',
@@ -72,6 +73,7 @@ describe('sync mappers', () => {
     expect(task.title).toBe('Buy milk')
     expect(task.priority).toBe(5)
     expect(task.status).toBe('pending')
+    expect(task.column_remote_id).toBe('col-abc')
     expect(task.tags).toEqual(['errands'])
     expect(task.start_date).toBe('2026-09-03T06:00:00.000Z')
     expect(task.due_date).toBe('2026-09-03T07:00:00.000Z')

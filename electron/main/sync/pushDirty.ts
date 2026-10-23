@@ -1,10 +1,11 @@
-import type { Project, ProjectFolder, Task } from '@shared/entities'
+import type { Project, ProjectFolder, ProjectSection, Task } from '@shared/entities'
 import { getRepositories } from '../db/connection'
 import { getTickTickClient, TickTickApiError } from '../ticktick/TickTickClient'
 import {
   extractRemoteId,
   localFolderToRemote,
   localProjectToRemote,
+  localSectionToRemote,
   localTaskToRemote,
 } from './mappers'
 
@@ -40,7 +41,7 @@ function sortTasksParentsFirst(tasks: Task[]): Task[] {
 }
 
 /**
- * Push all locally dirty (pending_*) folders → projects → tasks to TickTick.
+ * Push all locally dirty (pending_*) folders → projects → sections → tasks to TickTick.
  * Caller must gate on push_enabled.
  */
 export async function pushDirtyEntities(onProgress?: ProgressFn): Promise<PushResult> {
@@ -50,9 +51,10 @@ export async function pushDirtyEntities(onProgress?: ProgressFn): Promise<PushRe
 
   const folders = repos.folders.listPendingSync()
   const projects = repos.projects.listPendingSync()
+  const sections = repos.sections.listPendingSync()
   const tasks = sortTasksParentsFirst(repos.tasks.listPendingSync())
 
-  const total = folders.length + projects.length + tasks.length
+  const total = folders.length + projects.length + sections.length + tasks.length
   if (total === 0) {
     return { ran: true, processed: 0, errors: [] }
   }
@@ -84,6 +86,17 @@ export async function pushDirtyEntities(onProgress?: ProgressFn): Promise<PushRe
       processed += 1
     } catch (error) {
       errors.push(formatError('list', project.name, error))
+      if (isAuthError(error)) break
+    }
+  }
+
+  for (const section of sections) {
+    tick(`Pushing section “${section.name}”`)
+    try {
+      await pushSection(section)
+      processed += 1
+    } catch (error) {
+      errors.push(formatError('section', section.name, error))
       if (isAuthError(error)) break
     }
   }
@@ -169,6 +182,56 @@ async function pushProject(project: Project): Promise<void> {
   repos.projects.markSynced(project.id)
 }
 
+async function pushSection(section: ProjectSection): Promise<void> {
+  const repos = getRepositories()
+  const client = getTickTickClient()
+
+  const project = repos.projects.getById(section.project_id)
+  let projectRemoteId = project?.remote_id ?? null
+  if (!projectRemoteId && project?.is_inbox) {
+    const state = repos.db
+      .prepare('SELECT inbox_remote_id FROM sync_state WHERE id = 1')
+      .get() as { inbox_remote_id: string | null } | undefined
+    projectRemoteId = state?.inbox_remote_id ?? null
+  }
+  if (!projectRemoteId) {
+    throw new Error(
+      `List for section “${section.name}” has no TickTick id yet — push the list first`,
+    )
+  }
+
+  const payload = localSectionToRemote({
+    name: section.name,
+    sort_order: section.sort_order,
+  })
+
+  if (section.sync_status === 'pending_delete') {
+    if (section.remote_id) {
+      try {
+        await client.deleteColumn(projectRemoteId, section.remote_id)
+      } catch (error) {
+        // Some accounts may not expose column delete — still drop locally.
+        if (!(error instanceof TickTickApiError && (error.status === 404 || error.status === 405))) {
+          throw error
+        }
+      }
+    }
+    repos.sections.hardDelete(section.id)
+    return
+  }
+
+  if (section.sync_status === 'pending_create' || !section.remote_id) {
+    const response = await client.createColumn(projectRemoteId, payload)
+    const remoteId = extractRemoteId(response)
+    if (!remoteId) throw new Error('Create section succeeded but response had no id')
+    repos.sections.markSynced(section.id, remoteId)
+    return
+  }
+
+  await client.updateColumn(projectRemoteId, section.remote_id, payload)
+  repos.sections.markSynced(section.id)
+}
+
 async function pushTask(task: Task): Promise<void> {
   const repos = getRepositories()
   const client = getTickTickClient()
@@ -210,6 +273,20 @@ async function pushTask(task: Task): Promise<void> {
     }
   }
 
+  let columnRemoteId: string | null = null
+  if (task.section_id) {
+    const section = repos.sections.getById(task.section_id)
+    // Default "Not Sectioned" without a remote id ↔ TickTick null columnId
+    if (section?.is_default && !section.remote_id) {
+      columnRemoteId = null
+    } else {
+      columnRemoteId = section?.remote_id ?? null
+      if (section && !columnRemoteId) {
+        throw new Error(`Section “${section.name}” is not synced yet — push sections first`)
+      }
+    }
+  }
+
   const tags = repos.tags.getTagsForTask(task.id)
   const reminders = repos.reminders.listForTask(task.id).map((r) => ({
     kind: r.kind,
@@ -221,6 +298,7 @@ async function pushTask(task: Task): Promise<void> {
     content: task.content,
     projectRemoteId: resolvedProjectRemote,
     parentRemoteId,
+    columnRemoteId,
     priority: task.priority,
     status: task.status,
     due_date: task.due_date,

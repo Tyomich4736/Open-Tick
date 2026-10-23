@@ -36,6 +36,16 @@ export const ipc = {
     delete: (id: string) => getApi().folders.delete(id),
     reorder: (orderedIds: string[]) => getApi().folders.reorder(orderedIds),
   },
+  sections: {
+    list: (projectId: string) => getApi().sections.list(projectId),
+    create: (input: Parameters<Window['ticktick']['sections']['create']>[0]) =>
+      getApi().sections.create(input),
+    update: (id: string, input: Parameters<Window['ticktick']['sections']['update']>[1]) =>
+      getApi().sections.update(id, input),
+    delete: (id: string) => getApi().sections.delete(id),
+    reorder: (projectId: string, orderedIds: string[]) =>
+      getApi().sections.reorder(projectId, orderedIds),
+  },
   tasks: {
     list: (filter?: Parameters<Window['ticktick']['tasks']['list']>[0]) =>
       getApi().tasks.list(filter),

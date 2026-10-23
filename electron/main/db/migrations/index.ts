@@ -11,6 +11,8 @@ import { migration009 } from './009_drop_project_sections'
 import { migration010 } from './010_fix_tasks_section_fk'
 import { migration011 } from './011_normalize_task_dates'
 import { migration012 } from './012_tasks_parent_counts_index'
+import { migration013 } from './013_project_sections'
+import { migration014 } from './014_section_is_default'
 
 export interface Migration {
   version: number
@@ -30,6 +32,8 @@ export const migrations: Migration[] = [
   migration010,
   migration011,
   migration012,
+  migration013,
+  migration014,
 ]
 
 export function runMigrations(db: Database.Database): void {

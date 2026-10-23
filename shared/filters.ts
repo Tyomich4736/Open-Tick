@@ -3,7 +3,7 @@ import type { TaskStatus } from './entities'
 export type TaskSortMode = 'order' | 'due_date' | 'title' | 'priority'
 
 /** How root tasks are sectioned in the list view. */
-export type TaskGroupBy = 'none' | 'date' | 'list' | 'tag' | 'priority'
+export type TaskGroupBy = 'none' | 'section' | 'date' | 'list' | 'tag' | 'priority'
 
 export type SmartListId = 'inbox' | 'today' | 'tomorrow' | 'week' | 'overdue' | 'completed'
 
@@ -38,6 +38,7 @@ export const TASK_SORT_OPTIONS: { value: TaskSortMode; label: string }[] = [
 
 export const TASK_GROUP_BY_OPTIONS: { value: TaskGroupBy; label: string }[] = [
   { value: 'none', label: 'None' },
+  { value: 'section', label: 'Section' },
   { value: 'date', label: 'Date' },
   { value: 'list', label: 'List' },
   { value: 'tag', label: 'Tag' },
@@ -71,13 +72,25 @@ export function listGroupBySettingKey(scope: string): string {
   return `list_group_by.${scope}`
 }
 
-export function defaultGroupByForView(): TaskGroupBy {
+/** Collapsed group keys for a view + group-by mode (missing key = expanded). */
+export function listGroupCollapsedSettingKey(scope: string, groupBy: TaskGroupBy): string {
+  return `list_group_collapsed.${scope}.${groupBy}`
+}
+
+export function defaultGroupByForView(viewKind?: 'smart' | 'project' | 'tag'): TaskGroupBy {
+  // TickTick list view: project lists default to custom sections.
+  if (viewKind === 'project') return 'section'
   return 'none'
 }
 
-/** Group-by modes available for this view (list only inside smart lists). */
+/** Group-by modes available for this view (list only inside smart lists; section on projects). */
 export function groupByOptionsForView(viewKind: 'smart' | 'project' | 'tag'): typeof TASK_GROUP_BY_OPTIONS {
-  if (viewKind === 'smart') return TASK_GROUP_BY_OPTIONS
+  if (viewKind === 'smart') {
+    return TASK_GROUP_BY_OPTIONS.filter((opt) => opt.value !== 'section')
+  }
+  if (viewKind === 'tag') {
+    return TASK_GROUP_BY_OPTIONS.filter((opt) => opt.value !== 'list' && opt.value !== 'section')
+  }
   return TASK_GROUP_BY_OPTIONS.filter((opt) => opt.value !== 'list')
 }
 

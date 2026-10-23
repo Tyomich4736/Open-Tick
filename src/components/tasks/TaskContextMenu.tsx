@@ -1,5 +1,6 @@
 import type { Priority } from '@shared/entities'
 import { useProjects } from '@/hooks/useProjects'
+import { useSections } from '@/hooks/useSections'
 import { useTags, useTaskDetail } from '@/hooks/useTasks'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
 import { applyDueDaysFromNow } from '@shared/dueSchedule'
@@ -24,6 +25,7 @@ export function TaskContextMenu() {
 
   const taskId = menu?.type === 'task' ? menu.id : null
   const { data: task } = useTaskDetail(taskId)
+  const { sections } = useSections(task?.project_id)
 
   // Suppress single menu while bulk menu owns the interaction
   const isBulk =
@@ -118,6 +120,12 @@ export function TaskContextMenu() {
               }}
               isProjectActive={(id) => current.project_id === id}
               isPriorityActive={(p) => current.priority === p}
+              sections={sections}
+              onMoveToSection={(sectionId) => {
+                updateTask.mutate({ id: current.id, input: { section_id: sectionId } })
+                close()
+              }}
+              isSectionActive={(id) => (current.section_id ?? null) === id}
             />
 
             <Divider />

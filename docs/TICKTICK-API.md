@@ -159,7 +159,7 @@ Assign a project to a folder by setting `groupId` on create/update (`POST /proje
 | `POST` | `/task/filter` | Filter tasks server-side |
 | `GET/POST/DELETE` | `/project/{projectId}/task/{taskId}/comment` | Comments |
 
-We don’t map columns, habits, focus, or countdowns.
+We map columns as list **sections** (not a Kanban board UI). We don’t map habits, focus, or countdowns.
 
 ---
 

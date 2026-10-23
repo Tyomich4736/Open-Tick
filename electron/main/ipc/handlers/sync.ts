@@ -34,11 +34,13 @@ export async function handleSyncFullResetAndPull() {
 
     const wipe = db.transaction(() => {
       // Children first (FK-safe), then parents. Inbox project is recreated after wipe.
+      // project_sections → projects; tasks.section_id → project_sections (cleared with tasks).
       db.exec(`
         DELETE FROM sticky_notes;
         DELETE FROM task_reminders;
         DELETE FROM task_tags;
         DELETE FROM tasks;
+        DELETE FROM project_sections;
         DELETE FROM tags;
         DELETE FROM projects WHERE is_inbox = 0;
         DELETE FROM project_folders;

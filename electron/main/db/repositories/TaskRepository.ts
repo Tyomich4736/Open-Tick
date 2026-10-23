@@ -14,6 +14,7 @@ import type {
 } from '@shared/entities'
 import type { RecurrenceRule, ReminderInput } from '@shared/recurrence'
 import { nextOccurrenceDates } from '@shared/nextOccurrence'
+import type { ProjectSectionRepository } from './ProjectSectionRepository'
 import type { SettingsRepository } from './SettingsRepository'
 import type { TagRepository } from './TagRepository'
 import type { TaskReminderRepository } from './TaskReminderRepository'
@@ -35,6 +36,7 @@ interface TaskRow {
   remote_id: string | null
   project_id: string
   parent_id: string | null
+  section_id: string | null
   title: string
   content: string
   priority: Priority
@@ -66,6 +68,9 @@ interface TaskListRow {
   project_name: string
   project_color: string
   project_is_inbox: number
+  section_id: string | null
+  section_name: string | null
+  section_sort: number | null
   subtask_count: number
   completed_subtask_count: number
   created_at: string
@@ -91,6 +96,7 @@ function mapTask(row: TaskRow): Task {
     remote_id: row.remote_id,
     project_id: row.project_id,
     parent_id: row.parent_id,
+    section_id: row.section_id ?? null,
     title: row.title,
     content: row.content,
     priority: row.priority,
@@ -125,6 +131,7 @@ export class TaskRepository {
     private tagRepository: TagRepository,
     private settingsRepository: SettingsRepository,
     private reminderRepository: TaskReminderRepository,
+    private sections: ProjectSectionRepository,
   ) {}
 
   create(input: CreateTaskInput): Task {
@@ -140,6 +147,8 @@ export class TaskRepository {
         throw new Error('Subtask must belong to the same list as its parent')
       }
     }
+
+    const sectionId = this.resolveSectionId(input.project_id, input.section_id)
 
     const now = nowIso()
     const sortOrder =
@@ -157,6 +166,7 @@ export class TaskRepository {
       remote_id: null,
       project_id: input.project_id,
       parent_id: input.parent_id ?? null,
+      section_id: sectionId,
       title: input.title,
       content: input.content ?? '',
       priority: input.priority ?? 0,
@@ -179,11 +189,11 @@ export class TaskRepository {
     this.db
       .prepare(
         `INSERT INTO tasks (
-          id, remote_id, project_id, parent_id, title, content, priority, status,
+          id, remote_id, project_id, parent_id, section_id, title, content, priority, status,
           due_date, start_date, is_all_day, time_zone, recurrence_rule, recurrence_parent_id,
           sort_order, sync_status, remote_updated_at, completed_at, created_at, updated_at, deleted_at
         ) VALUES (
-          @id, @remote_id, @project_id, @parent_id, @title, @content, @priority, @status,
+          @id, @remote_id, @project_id, @parent_id, @section_id, @title, @content, @priority, @status,
           @due_date, @start_date, @is_all_day, @time_zone, @recurrence_rule, @recurrence_parent_id,
           @sort_order, @sync_status, @remote_updated_at, @completed_at, @created_at, @updated_at, @deleted_at
         )`,
@@ -225,6 +235,15 @@ export class TaskRepository {
       }
     }
 
+    const nextProjectId = input.project_id ?? existing.project_id
+    let nextSectionId = existing.section_id
+    if (input.section_id !== undefined) {
+      nextSectionId = this.resolveSectionId(nextProjectId, input.section_id)
+    } else if (input.project_id && input.project_id !== existing.project_id) {
+      // Moving lists clears section unless a new section was provided.
+      nextSectionId = null
+    }
+
     const isRecurring =
       Boolean(existing.recurrence_rule) || Boolean(existing.recurrence_parent_id)
     const editThisOnly = input.recurrence_edit_scope === 'this' && isRecurring
@@ -241,7 +260,8 @@ export class TaskRepository {
     const updated: Task = {
       ...existing,
       title: input.title ?? existing.title,
-      project_id: input.project_id ?? existing.project_id,
+      project_id: nextProjectId,
+      section_id: nextSectionId,
       content: input.content ?? existing.content,
       priority: input.priority ?? existing.priority,
       due_date: input.due_date !== undefined ? input.due_date : existing.due_date,
@@ -258,9 +278,9 @@ export class TaskRepository {
     this.db
       .prepare(
         `UPDATE tasks SET
-          title = @title, project_id = @project_id, content = @content, priority = @priority,
-          due_date = @due_date, start_date = @start_date, is_all_day = @is_all_day,
-          time_zone = @time_zone, parent_id = @parent_id,
+          title = @title, project_id = @project_id, section_id = @section_id, content = @content,
+          priority = @priority, due_date = @due_date, start_date = @start_date,
+          is_all_day = @is_all_day, time_zone = @time_zone, parent_id = @parent_id,
           recurrence_rule = @recurrence_rule, recurrence_parent_id = @recurrence_parent_id,
           sync_status = @sync_status, updated_at = @updated_at
          WHERE id = @id`,
@@ -287,6 +307,25 @@ export class TaskRepository {
     }
 
     return updated
+  }
+
+  /**
+   * Resolve section for create/update.
+   * null/undefined → ensure/create "Not Sectioned" when the list already has sections; else null.
+   */
+  private resolveSectionId(projectId: string, sectionId: string | null | undefined): string | null {
+    if (sectionId != null) {
+      const row = this.db
+        .prepare(
+          `SELECT id FROM project_sections
+           WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+        )
+        .get(sectionId, projectId) as { id: string } | undefined
+      if (!row) throw new Error(`Section not found: ${sectionId}`)
+      return row.id
+    }
+    this.sections.ensureDefaultSection(projectId)
+    return this.sections.getDefaultForProject(projectId)?.id ?? null
   }
 
   /** Walk ancestors to prevent cycles when reparenting. */
@@ -370,6 +409,7 @@ export class TaskRepository {
       is_all_day: completed.is_all_day,
       time_zone: completed.time_zone,
       parent_id: completed.parent_id,
+      section_id: completed.section_id,
       tags,
       recurrence_rule: next.rule,
     })
@@ -580,6 +620,7 @@ export class TaskRepository {
       title: `${existing.title} (copy)`,
       project_id: existing.project_id,
       parent_id: existing.parent_id,
+      section_id: existing.section_id,
       content: existing.content,
       priority: existing.priority,
       due_date: existing.due_date,
@@ -728,6 +769,7 @@ export class TaskRepository {
     remote_id: string
     project_id: string
     parent_id: string | null
+    section_id: string | null
     title: string
     content: string
     priority: Priority
@@ -753,6 +795,7 @@ export class TaskRepository {
           ...existing,
           project_id: input.project_id,
           parent_id: input.parent_id,
+          section_id: input.section_id,
           title: input.title,
           content: input.content,
           priority: input.priority,
@@ -772,7 +815,7 @@ export class TaskRepository {
         this.db
           .prepare(
             `UPDATE tasks SET
-              project_id = @project_id, parent_id = @parent_id,
+              project_id = @project_id, parent_id = @parent_id, section_id = @section_id,
               title = @title, content = @content,
               priority = @priority, status = @status, due_date = @due_date, start_date = @start_date,
               is_all_day = @is_all_day, time_zone = @time_zone, recurrence_rule = @recurrence_rule,
@@ -794,6 +837,7 @@ export class TaskRepository {
         ...existing,
         project_id: input.project_id,
         parent_id: input.parent_id,
+        section_id: input.section_id,
         title: input.title,
         content: input.content,
         priority: input.priority,
@@ -813,7 +857,7 @@ export class TaskRepository {
       this.db
         .prepare(
           `UPDATE tasks SET
-            project_id = @project_id, parent_id = @parent_id,
+            project_id = @project_id, parent_id = @parent_id, section_id = @section_id,
             title = @title, content = @content,
             priority = @priority, status = @status, due_date = @due_date, start_date = @start_date,
             is_all_day = @is_all_day, time_zone = @time_zone, recurrence_rule = @recurrence_rule,
@@ -836,6 +880,7 @@ export class TaskRepository {
       remote_id: input.remote_id,
       project_id: input.project_id,
       parent_id: input.parent_id,
+      section_id: input.section_id,
       title: input.title,
       content: input.content,
       priority: input.priority,
@@ -858,11 +903,11 @@ export class TaskRepository {
     this.db
       .prepare(
         `INSERT INTO tasks (
-          id, remote_id, project_id, parent_id, title, content, priority, status,
+          id, remote_id, project_id, parent_id, section_id, title, content, priority, status,
           due_date, start_date, is_all_day, time_zone, recurrence_rule, recurrence_parent_id,
           sort_order, sync_status, remote_updated_at, completed_at, created_at, updated_at, deleted_at
         ) VALUES (
-          @id, @remote_id, @project_id, @parent_id, @title, @content, @priority, @status,
+          @id, @remote_id, @project_id, @parent_id, @section_id, @title, @content, @priority, @status,
           @due_date, @start_date, @is_all_day, @time_zone, @recurrence_rule, @recurrence_parent_id,
           @sort_order, @sync_status, @remote_updated_at, @completed_at, @created_at, @updated_at, @deleted_at
         )`,
@@ -880,12 +925,14 @@ export class TaskRepository {
       .prepare(
         `SELECT
           t.id, t.title, t.status, t.priority, t.due_date, t.start_date, t.is_all_day,
-          t.project_id, t.created_at, t.recurrence_rule,
+          t.project_id, t.section_id, t.created_at, t.recurrence_rule,
           p.name as project_name, p.color as project_color, p.is_inbox as project_is_inbox,
+          s.name as section_name, s.sort_order as section_sort,
           COALESCE(sc.subtask_count, 0) as subtask_count,
           COALESCE(sc.completed_subtask_count, 0) as completed_subtask_count
          FROM tasks t
          INNER JOIN projects p ON p.id = t.project_id
+         LEFT JOIN project_sections s ON s.id = t.section_id AND s.deleted_at IS NULL
          LEFT JOIN (
            SELECT
              parent_id,
@@ -917,6 +964,9 @@ export class TaskRepository {
       // Inbox has no list color; calendar highlights via project_is_inbox
       project_color: asBool(row.project_is_inbox) ? '' : row.project_color,
       project_is_inbox: asBool(row.project_is_inbox),
+      section_id: row.section_id,
+      section_name: row.section_name,
+      section_sort: row.section_sort,
       tags: tagsByTask.get(row.id) ?? [],
       subtask_count: row.subtask_count,
       completed_subtask_count: row.completed_subtask_count,

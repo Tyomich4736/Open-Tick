@@ -24,7 +24,14 @@ async function writeSetting(key: string, value: unknown): Promise<void> {
   }
 }
 
-const GROUP_BY_VALUES = new Set<TaskGroupBy>(['none', 'date', 'list', 'tag', 'priority'])
+const GROUP_BY_VALUES = new Set<TaskGroupBy>([
+  'none',
+  'section',
+  'date',
+  'list',
+  'tag',
+  'priority',
+])
 
 function parseGroupBy(value: unknown, fallback: TaskGroupBy): TaskGroupBy {
   if (value === 'created') return 'none'
@@ -36,21 +43,30 @@ function parseGroupBy(value: unknown, fallback: TaskGroupBy): TaskGroupBy {
 /**
  * Local-first list prefs: UI updates immediately; disk write is fire-and-forget.
  * Pass `allowListGroup` false for project/tag views so a stored "list" group falls back.
+ * Pass `allowSectionGroup` false for smart/tag views that don't support sections.
  */
 export function useListPreferences(
   scope: string,
   smartList?: SmartListId | null,
-  options?: { allowListGroup?: boolean },
+  options?: {
+    allowListGroup?: boolean
+    allowSectionGroup?: boolean
+    viewKind?: 'smart' | 'project' | 'tag'
+  },
 ) {
   const allowListGroup = options?.allowListGroup ?? true
+  const allowSectionGroup = options?.allowSectionGroup ?? true
+  const viewKind = options?.viewKind
   const [sort, setSortState] = useState<TaskSortMode>(() => defaultSortForView(smartList))
   const [showCompleted, setShowCompletedState] = useState(false)
-  const [groupBy, setGroupByState] = useState<TaskGroupBy>(() => defaultGroupByForView())
+  const [groupBy, setGroupByState] = useState<TaskGroupBy>(() =>
+    defaultGroupByForView(viewKind),
+  )
 
   useEffect(() => {
     let cancelled = false
     const fallbackSort = defaultSortForView(smartList)
-    const fallbackGroup = defaultGroupByForView()
+    const fallbackGroup = defaultGroupByForView(viewKind)
 
     void (async () => {
       const [storedSort, storedShow, storedGroup] = await Promise.all([
@@ -63,13 +79,14 @@ export function useListPreferences(
       setShowCompletedState(typeof storedShow === 'boolean' ? storedShow : false)
       let nextGroup = parseGroupBy(storedGroup, fallbackGroup)
       if (!allowListGroup && nextGroup === 'list') nextGroup = 'none'
+      if (!allowSectionGroup && nextGroup === 'section') nextGroup = fallbackGroup
       setGroupByState(nextGroup)
     })()
 
     return () => {
       cancelled = true
     }
-  }, [scope, smartList, allowListGroup])
+  }, [scope, smartList, allowListGroup, allowSectionGroup, viewKind])
 
   const setSort = useCallback(
     (next: TaskSortMode) => {
@@ -89,11 +106,15 @@ export function useListPreferences(
 
   const setGroupBy = useCallback(
     (next: TaskGroupBy) => {
-      const resolved = !allowListGroup && next === 'list' ? 'none' : next
+      let resolved = next
+      if (!allowListGroup && resolved === 'list') resolved = 'none'
+      if (!allowSectionGroup && resolved === 'section') {
+        resolved = defaultGroupByForView(viewKind)
+      }
       setGroupByState(resolved)
       void writeSetting(listGroupBySettingKey(scope), resolved)
     },
-    [scope, allowListGroup],
+    [scope, allowListGroup, allowSectionGroup, viewKind],
   )
 
   return { sort, showCompleted, groupBy, setSort, setShowCompleted, setGroupBy }

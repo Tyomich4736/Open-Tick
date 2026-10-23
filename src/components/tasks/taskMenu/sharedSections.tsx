@@ -1,4 +1,4 @@
-import type { Priority, Project, Tag } from '@shared/entities'
+import type { Priority, Project, ProjectSection, Tag } from '@shared/entities'
 import { priorityLabels } from '@/lib/priority'
 import type { TaskMenuSubmenu } from './TaskActionMenuShell'
 import { MenuItem, SubmenuTrigger } from './menuPrimitives'
@@ -27,6 +27,9 @@ interface SharedMenuSectionsProps {
   onMoveToProject: (projectId: string) => void
   isProjectActive?: (projectId: string) => boolean
   isPriorityActive?: (priority: Priority) => boolean
+  sections?: ProjectSection[]
+  onMoveToSection?: (sectionId: string | null) => void
+  isSectionActive?: (sectionId: string | null) => boolean
 }
 
 export function SharedMenuSections({
@@ -43,9 +46,13 @@ export function SharedMenuSections({
   onMoveToProject,
   isProjectActive,
   isPriorityActive,
+  sections,
+  onMoveToSection,
+  isSectionActive,
 }: SharedMenuSectionsProps) {
   const flyout = flyoutClassName(openLeft)
   const flyoutScroll = flyoutClassName(openLeft, true)
+  const showSections = Boolean(onMoveToSection && sections)
 
   return (
     <>
@@ -120,6 +127,30 @@ export function SharedMenuSections({
           </div>
         )}
       </SubmenuTrigger>
+
+      {showSections && (
+        <SubmenuTrigger
+          label="Move to section"
+          active={submenu === 'section'}
+          onHover={() => openSub('section')}
+        >
+          {submenu === 'section' && (
+            <div className={flyoutScroll} onMouseEnter={() => openSub('section')}>
+              {(sections ?? []).map((section) => (
+                <MenuItem
+                  key={section.id}
+                  label={section.name}
+                  active={
+                    isSectionActive?.(section.id) ||
+                    (section.is_default && isSectionActive?.(null))
+                  }
+                  onClick={() => onMoveToSection?.(section.id)}
+                />
+              ))}
+            </div>
+          )}
+        </SubmenuTrigger>
+      )}
     </>
   )
 }

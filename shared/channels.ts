@@ -15,6 +15,12 @@ export const IPC_CHANNELS = {
   FOLDER_DELETE: 'folder:delete',
   FOLDER_REORDER: 'folder:reorder',
 
+  SECTION_LIST: 'section:list',
+  SECTION_CREATE: 'section:create',
+  SECTION_UPDATE: 'section:update',
+  SECTION_DELETE: 'section:delete',
+  SECTION_REORDER: 'section:reorder',
+
   TASK_LIST: 'task:list',
   TASK_COUNT: 'task:count',
   TASK_GET: 'task:get',

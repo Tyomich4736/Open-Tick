@@ -7,10 +7,12 @@ import type {
   ChangeNotification,
   CreateFolderInput,
   CreateProjectInput,
+  CreateSectionInput,
   CreateTagInput,
   CreateTaskInput,
   Project,
   ProjectFolder,
+  ProjectSection,
   StickyBoundsPatch,
   StickyNote,
   Tag,
@@ -19,6 +21,7 @@ import type {
   TaskListItem,
   UpdateFolderInput,
   UpdateProjectInput,
+  UpdateSectionInput,
   UpdateTaskInput,
 } from './entities'
 import type { TaskFilter } from './filters'
@@ -70,6 +73,14 @@ export interface TickTickApi {
     update: (id: string, input: UpdateFolderInput) => Promise<IpcResult<ProjectFolder>>
     delete: (id: string) => Promise<IpcResult<void>>
     reorder: (orderedIds: string[]) => Promise<IpcResult<void>>
+  }
+
+  sections: {
+    list: (projectId: string) => Promise<IpcResult<ProjectSection[]>>
+    create: (input: CreateSectionInput) => Promise<IpcResult<ProjectSection>>
+    update: (id: string, input: UpdateSectionInput) => Promise<IpcResult<ProjectSection>>
+    delete: (id: string) => Promise<IpcResult<void>>
+    reorder: (projectId: string, orderedIds: string[]) => Promise<IpcResult<void>>
   }
 
   tasks: {

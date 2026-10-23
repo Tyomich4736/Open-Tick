@@ -24,6 +24,15 @@ const api: TickTickApi = {
     reorder: (orderedIds) => ipcRenderer.invoke(IPC_CHANNELS.FOLDER_REORDER, orderedIds),
   },
 
+  sections: {
+    list: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.SECTION_LIST, projectId),
+    create: (input) => ipcRenderer.invoke(IPC_CHANNELS.SECTION_CREATE, input),
+    update: (id, input) => ipcRenderer.invoke(IPC_CHANNELS.SECTION_UPDATE, id, input),
+    delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.SECTION_DELETE, id),
+    reorder: (projectId, orderedIds) =>
+      ipcRenderer.invoke(IPC_CHANNELS.SECTION_REORDER, projectId, orderedIds),
+  },
+
   tasks: {
     list: (filter) => ipcRenderer.invoke(IPC_CHANNELS.TASK_LIST, filter),
     count: (filter) => ipcRenderer.invoke(IPC_CHANNELS.TASK_COUNT, filter),

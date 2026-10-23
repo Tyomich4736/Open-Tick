@@ -12,6 +12,7 @@ import { notifySyncComplete } from '../ipc/notify'
 import { IPC_CHANNELS } from '@shared/channels'
 import { BrowserWindow } from 'electron'
 import { remoteFolderToLocal, remoteProjectToLocal, remoteTaskToLocal } from './mappers'
+import { resolveSectionIdForPull, upsertRemoteColumns } from './sectionPull'
 import { getTickTickClient, TickTickApiError } from '../ticktick/TickTickClient'
 import { pushDirtyEntities, type PushResult } from './pushDirty'
 import { getTokenService } from '../ticktick/TokenService'
@@ -117,7 +118,7 @@ export class SyncEngine {
   }
 
   private getPendingPushCounts(): SyncStatusDto['pendingPush'] {
-    const zero = { total: 0, tasks: 0, projects: 0, folders: 0 }
+    const zero = { total: 0, tasks: 0, projects: 0, folders: 0, sections: 0 }
     try {
       const db = getRepositories().db
 
@@ -134,12 +135,14 @@ export class SyncEngine {
       const dirtyTasks = getCount(`SELECT COUNT(*) as c FROM tasks WHERE sync_status LIKE 'pending_%'`)
       const dirtyProjects = getCount(`SELECT COUNT(*) as c FROM projects WHERE sync_status LIKE 'pending_%' AND is_inbox = 0`)
       const dirtyFolders = getCount(`SELECT COUNT(*) as c FROM project_folders WHERE sync_status LIKE 'pending_%'`)
+      const dirtySections = getCount(`SELECT COUNT(*) as c FROM project_sections WHERE sync_status LIKE 'pending_%'`)
 
       const tasks = (qByType.task ?? 0) + dirtyTasks
       const projects = (qByType.project ?? 0) + dirtyProjects
       const folders = (qByType.folder ?? 0) + dirtyFolders
+      const sections = (qByType.section ?? 0) + dirtySections
 
-      return { total: tasks + projects + folders, tasks, projects, folders }
+      return { total: tasks + projects + folders + sections, tasks, projects, folders, sections }
     } catch (e) {
       console.warn('[sync] getPendingPushCounts failed:', e)
       return zero
@@ -369,6 +372,12 @@ export class SyncEngine {
           projectIdByRemote.set(inboxRemoteId, repos.projects.ensureInbox().id)
         }
         const inboxTaskList = Array.isArray(inboxTasks) ? inboxTasks : []
+        if (inboxRemoteId) {
+          const inboxLocalId = projectIdByRemote.get(inboxRemoteId)
+          if (inboxLocalId) {
+            upsertRemoteColumns(repos, inboxLocalId, inboxData.columns)
+          }
+        }
         stats.tasks += this.upsertTaskBatch(
           inboxTaskList,
           projectIdByRemote,
@@ -401,8 +410,11 @@ export class SyncEngine {
         try {
           const data = await client.getProjectData(remote.id)
           const tasks = Array.isArray(data?.tasks) ? data.tasks : []
-          stats.tasks += this.upsertTaskBatch(tasks, projectIdByRemote, stats, remote.id)
           const localProjectId = projectIdByRemote.get(remote.id)
+          if (localProjectId) {
+            upsertRemoteColumns(repos, localProjectId, data?.columns)
+          }
+          stats.tasks += this.upsertTaskBatch(tasks, projectIdByRemote, stats, remote.id)
           if (localProjectId) {
             activeByProject.push({
               localId: localProjectId,
@@ -623,10 +635,18 @@ export class SyncEngine {
           null
       }
 
+      const sectionId = resolveSectionIdForPull(
+        repos,
+        m.column_remote_id,
+        existing?.section_id ?? null,
+        projectId,
+      )
+
       const task = repos.tasks.upsertFromRemote({
         remote_id: m.remote_id,
         project_id: projectId,
         parent_id: parentId,
+        section_id: sectionId,
         title: m.title,
         content: m.content,
         priority: m.priority,

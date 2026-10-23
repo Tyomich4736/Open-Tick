@@ -31,6 +31,8 @@ export interface RemoteTask {
   isAllDay?: boolean
   timeZone?: string | null
   parentId?: string | null
+  /** TickTick section / kanban column id */
+  columnId?: string | null
   tags?: string[]
   /** iCal TRIGGER strings, e.g. TRIGGER:-PT15M */
   reminders?: string[] | null
@@ -42,7 +44,16 @@ export interface RemoteTask {
   kind?: string
 }
 
+/** List section (TickTick calls these columns). */
+export interface RemoteColumn {
+  id: string
+  projectId?: string
+  name?: string
+  sortOrder?: number
+}
+
 export interface RemoteProjectData {
   project?: RemoteProject
   tasks?: RemoteTask[]
+  columns?: RemoteColumn[]
 }

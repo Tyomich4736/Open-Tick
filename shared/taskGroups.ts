@@ -6,7 +6,7 @@ import {
   parseISO,
   startOfDay,
 } from 'date-fns'
-import type { Priority, TaskListItem } from './entities'
+import type { Priority, ProjectSection, TaskListItem } from './entities'
 import type { TaskGroupBy } from './filters'
 
 export interface TaskGroup {
@@ -15,6 +15,8 @@ export interface TaskGroup {
   /** Ascending sort among groups; lower first. */
   sort: number
   tasks: TaskListItem[]
+  /** Local section id when grouping by section (null = unsectioned). */
+  sectionId?: string | null
 }
 
 const PRIORITY_ORDER: Priority[] = [5, 3, 1, 0]
@@ -54,13 +56,15 @@ function pushGroup(
   label: string,
   sort: number,
   task: TaskListItem,
-): void {
+): TaskGroup {
   const existing = map.get(key)
   if (existing) {
     existing.tasks.push(task)
-    return
+    return existing
   }
-  map.set(key, { key, label, sort, tasks: [task] })
+  const created: TaskGroup = { key, label, sort, tasks: [task] }
+  map.set(key, created)
+  return created
 }
 
 /**
@@ -109,12 +113,91 @@ export function groupTasks(tasks: TaskListItem[], groupBy: TaskGroupBy): TaskGro
         )
         break
       }
+      case 'section': {
+        // Prefer groupTasksBySection when the full section list is available
+        // (includes empty sections). Fallback groups only populated sections.
+        if (task.section_id) {
+          const group = pushGroup(
+            map,
+            task.section_id,
+            task.section_name?.trim() || 'Untitled',
+            task.section_sort ?? 0,
+            task,
+          )
+          group.sectionId = task.section_id
+        } else {
+          // Legacy null section_id — treat as Not Sectioned bucket
+          const group = pushGroup(
+            map,
+            'not-sectioned',
+            'Not Sectioned',
+            Number.POSITIVE_INFINITY,
+            task,
+          )
+          group.sectionId = null
+        }
+        break
+      }
       default:
         pushGroup(map, 'all', '', 0, task)
     }
   }
 
   return [...map.values()].sort((a, b) => {
+    if (a.sort !== b.sort) return a.sort - b.sort
+    return a.label.localeCompare(b.label)
+  })
+}
+
+/**
+ * Group by TickTick list sections, including empty sections in sort order.
+ * Default "Not Sectioned" is a real section row; orphan/null tasks join that bucket when present.
+ */
+export function groupTasksBySection(
+  tasks: TaskListItem[],
+  sections: Array<Pick<ProjectSection, 'id' | 'name' | 'sort_order' | 'is_default'>>,
+): TaskGroup[] {
+  if (sections.length === 0) {
+    return [{ key: 'all', label: '', sort: 0, tasks, sectionId: null }]
+  }
+
+  const groups: TaskGroup[] = sections.map((section) => ({
+    key: section.id,
+    label: section.name.trim() || 'Untitled',
+    sort: section.sort_order,
+    tasks: [],
+    sectionId: section.id,
+  }))
+  const byId = new Map(groups.map((g) => [g.key, g]))
+  let defaultGroup =
+    groups.find((_, i) => sections[i]?.is_default) ??
+    groups.find((g) => g.label.trim().toLowerCase() === 'not sectioned') ??
+    null
+
+  const orphans: TaskListItem[] = []
+  for (const task of tasks) {
+    if (task.section_id && byId.has(task.section_id)) {
+      byId.get(task.section_id)!.tasks.push(task)
+    } else if (defaultGroup) {
+      defaultGroup.tasks.push(task)
+    } else {
+      orphans.push(task)
+    }
+  }
+
+  // Never drop tasks if default is missing from the section list yet
+  if (orphans.length > 0 && !defaultGroup) {
+    defaultGroup = {
+      key: 'not-sectioned',
+      label: 'Not Sectioned',
+      sort: Number.NEGATIVE_INFINITY,
+      tasks: orphans,
+      sectionId: null,
+    }
+    groups.push(defaultGroup)
+  }
+
+  return groups.sort((a, b) => {
     if (a.sort !== b.sort) return a.sort - b.sort
     return a.label.localeCompare(b.label)
   })

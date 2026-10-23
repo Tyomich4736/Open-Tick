@@ -23,6 +23,11 @@ import {
   handleFolderList,
   handleFolderReorder,
   handleFolderUpdate,
+  handleSectionCreate,
+  handleSectionDelete,
+  handleSectionList,
+  handleSectionReorder,
+  handleSectionUpdate,
   handleProjectCreate,
   handleProjectDelete,
   handleProjectGet,
@@ -98,6 +103,20 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.FOLDER_DELETE, (_event, id: string) => handleFolderDelete(id))
   ipcMain.handle(IPC_CHANNELS.FOLDER_REORDER, (_event, orderedIds: string[]) =>
     handleFolderReorder(orderedIds),
+  )
+
+  ipcMain.handle(IPC_CHANNELS.SECTION_LIST, (_event, projectId: string) =>
+    handleSectionList(projectId),
+  )
+  ipcMain.handle(IPC_CHANNELS.SECTION_CREATE, (_event, input) => handleSectionCreate(input))
+  ipcMain.handle(IPC_CHANNELS.SECTION_UPDATE, (_event, id: string, input) =>
+    handleSectionUpdate(id, input),
+  )
+  ipcMain.handle(IPC_CHANNELS.SECTION_DELETE, (_event, id: string) => handleSectionDelete(id))
+  ipcMain.handle(
+    IPC_CHANNELS.SECTION_REORDER,
+    (_event, projectId: string, orderedIds: string[]) =>
+      handleSectionReorder(projectId, orderedIds),
   )
 
   ipcMain.handle(IPC_CHANNELS.TASK_LIST, (_event, filter) => handleTaskList(filter))

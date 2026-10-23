@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { runMigrations } from './migrations'
 import { ProjectFolderRepository } from './repositories/ProjectFolderRepository'
 import { ProjectRepository } from './repositories/ProjectRepository'
+import { ProjectSectionRepository } from './repositories/ProjectSectionRepository'
 import { SettingsRepository } from './repositories/SettingsRepository'
 import { StickyNoteRepository } from './repositories/StickyNoteRepository'
 import { TagRepository } from './repositories/TagRepository'
@@ -13,6 +14,7 @@ export interface Repositories {
   db: Database.Database
   projects: ProjectRepository
   folders: ProjectFolderRepository
+  sections: ProjectSectionRepository
   tasks: TaskRepository
   tags: TagRepository
   reminders: TaskReminderRepository
@@ -26,13 +28,15 @@ export function createRepositories(database: Database.Database): Repositories {
   const reminders = new TaskReminderRepository(database)
   const folders = new ProjectFolderRepository(database)
   const projects = new ProjectRepository(database)
-  const tasks = new TaskRepository(database, tags, settings, reminders)
+  const sections = new ProjectSectionRepository(database)
+  const tasks = new TaskRepository(database, tags, settings, reminders, sections)
   const stickies = new StickyNoteRepository(database)
 
   return {
     db: database,
     projects,
     folders,
+    sections,
     tasks,
     tags,
     reminders,

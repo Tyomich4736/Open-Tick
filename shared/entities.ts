@@ -42,11 +42,29 @@ export interface ProjectFolder {
   deleted_at: string | null
 }
 
+/** TickTick list section (API: column). */
+export interface ProjectSection {
+  id: string
+  remote_id: string | null
+  project_id: string
+  name: string
+  sort_order: number
+  /** Undeletable default bucket (TickTick "Not Sectioned"). */
+  is_default: boolean
+  sync_status: SyncStatus
+  remote_updated_at: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
 export interface Task {
   id: string
   remote_id: string | null
   project_id: string
   parent_id: string | null
+  /** TickTick section / column; prefer default “Not Sectioned” when list has sections. */
+  section_id: string | null
   title: string
   content: string
   priority: Priority
@@ -86,6 +104,9 @@ export interface TaskListItem {
   project_color: string
   /** True when the task lives in Inbox (no list color bar; calendar uses dashed accent). */
   project_is_inbox: boolean
+  section_id: string | null
+  section_name: string | null
+  section_sort: number | null
   tags: string[]
   subtask_count: number
   completed_subtask_count: number
@@ -123,6 +144,17 @@ export interface UpdateFolderInput {
   sort_order?: number
 }
 
+export interface CreateSectionInput {
+  project_id: string
+  name: string
+  sort_order?: number
+}
+
+export interface UpdateSectionInput {
+  name?: string
+  sort_order?: number
+}
+
 export interface TaskDetail extends Task {
   tags: string[]
   reminders: TaskReminder[]
@@ -138,6 +170,7 @@ export interface CreateTaskInput {
   is_all_day?: boolean
   time_zone?: string | null
   parent_id?: string | null
+  section_id?: string | null
   tags?: string[]
   recurrence_rule?: RecurrenceRule | null
   reminders?: ReminderInput[]
@@ -153,6 +186,7 @@ export interface UpdateTaskInput {
   is_all_day?: boolean
   time_zone?: string | null
   parent_id?: string | null
+  section_id?: string | null
   tags?: string[]
   recurrence_rule?: RecurrenceRule | null
   /**
@@ -183,7 +217,7 @@ export interface CreateTagInput {
 }
 
 export interface ChangeNotification {
-  entityType: 'task' | 'project' | 'tag' | 'folder' | 'all'
+  entityType: 'task' | 'project' | 'tag' | 'folder' | 'section' | 'all'
   entityId?: string
   reason: 'local' | 'sync'
 }

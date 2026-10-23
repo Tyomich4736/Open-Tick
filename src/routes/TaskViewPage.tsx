@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { addDays, formatISO, startOfDay } from 'date-fns'
 import type { ViewType } from '@/lib/viewContext'
 import { emptyStateForView, filterFromView, viewFromPath, viewSortScope } from '@/lib/viewContext'
 import { useProjects, useInboxProject } from '@/hooks/useProjects'
 import { useListPreferences } from '@/hooks/useListPreferences'
+import { useSections } from '@/hooks/useSections'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
 import { useUiStore } from '@/stores/uiStore'
 import {
@@ -13,6 +14,7 @@ import {
 } from '@/stores/taskSelectionStore'
 import { ipc } from '@/lib/ipc-client'
 import { groupByOptionsForView } from '@shared/filters'
+import { ManageSectionsButton } from '@/components/tasks/ManageSectionsButton'
 import { QuickAdd } from '@/components/tasks/QuickAdd'
 import { TaskList } from '@/components/tasks/TaskList'
 import { ViewSettingsButton } from '@/components/tasks/ViewSettingsButton'
@@ -39,8 +41,13 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
   const location = useLocation()
   const scope = viewSortScope(view)
   const smartList = view.kind === 'smart' ? view.smart_list : null
+  const isProjectView = view.kind === 'project'
   const { sort, showCompleted, groupBy, setSort, setShowCompleted, setGroupBy } =
-    useListPreferences(scope, smartList, { allowListGroup: view.kind === 'smart' })
+    useListPreferences(scope, smartList, {
+      allowListGroup: view.kind === 'smart',
+      allowSectionGroup: isProjectView,
+      viewKind: view.kind,
+    })
 
   const filter = useMemo(
     () =>
@@ -58,8 +65,15 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
   const selectedIds = useTaskSelectionStore((s) => s.selectedIds)
   const selectedTaskId = useTaskSelectionStore(selectSelectedTaskId)
   const clearSelection = useTaskSelectionStore((s) => s.clear)
+  const [quickAddSectionId, setQuickAddSectionId] = useState<string | null>(null)
 
   const defaultProjectId = view.kind === 'project' ? view.projectId : inbox?.id
+  const sectionsProjectId = isProjectView ? view.projectId : null
+  const { sections } = useSections(sectionsProjectId)
+
+  useEffect(() => {
+    setQuickAddSectionId(null)
+  }, [sectionsProjectId])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -139,6 +153,9 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
           <p className="mt-0.5 text-sm text-text-muted">{view.description}</p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {isProjectView && sectionsProjectId && !isCompletedView && (
+            <ManageSectionsButton projectId={sectionsProjectId} />
+          )}
           {!isCompletedView && (
             <ViewSettingsButton
               sort={sort}
@@ -158,17 +175,23 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
 
       {canQuickAdd && (
         <QuickAdd
-          placeholder={`Add task to ${view.title}`}
+          placeholder={
+            quickAddSectionId
+              ? `Add task to ${sections.find((s) => s.id === quickAddSectionId)?.name ?? 'section'}`
+              : `Add task to ${view.title}`
+          }
           disabled={!defaultProjectId}
           onSubmit={(title) => {
             if (!defaultProjectId) return
             createTask.mutate({
               title,
               project_id: defaultProjectId,
+              section_id: isProjectView ? quickAddSectionId : undefined,
               due_date: defaultDueDate(view),
               is_all_day: true,
               tags: view.kind === 'tag' ? [view.tagName] : undefined,
             })
+            setQuickAddSectionId(null)
           }}
         />
       )}
@@ -176,10 +199,24 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
       <div className="flex-1 overflow-y-auto">
         <TaskList
           filter={filter}
-          allowReorder={!isCompletedView && sort === 'order' && groupBy === 'none'}
+          allowReorder={
+            !isCompletedView &&
+            sort === 'order' &&
+            (groupBy === 'none' || groupBy === 'section')
+          }
           emptyTitle={empty.title}
           emptyDescription={empty.description}
           groupBy={isCompletedView ? 'none' : groupBy}
+          collapseScope={scope}
+          sections={isProjectView && groupBy === 'section' ? sections : undefined}
+          onAddInSection={
+            isProjectView && groupBy === 'section'
+              ? (sectionId) => {
+                  setQuickAddSectionId(sectionId)
+                  focusQuickAdd()
+                }
+              : undefined
+          }
         />
       </div>
     </div>

@@ -5,6 +5,7 @@ export interface SyncPendingPush {
   tasks: number
   projects: number
   folders: number
+  sections: number
 }
 
 /** Lightweight row for Integration panel “unpushed tasks” list. */

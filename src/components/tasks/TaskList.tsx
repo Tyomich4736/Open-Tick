@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { CheckSquare } from 'lucide-react'
+import { CheckSquare, ChevronRight } from 'lucide-react'
 import type { TaskFilter, TaskGroupBy } from '@shared/filters'
-import type { TaskListItem } from '@shared/entities'
-import { groupTasks } from '@shared/taskGroups'
+import type { ProjectSection, TaskListItem } from '@shared/entities'
+import { groupTasks, groupTasksBySection } from '@shared/taskGroups'
+import { useCollapsedGroups } from '@/hooks/useCollapsedGroups'
 import { useTaskMutations } from '@/hooks/useTaskMutations'
 import { useListDensity } from '@/hooks/useLayoutSettings'
 import { useTimeFormat } from '@/hooks/useTimeFormat'
@@ -29,6 +30,12 @@ interface TaskListProps {
   showEmptyState?: boolean
   /** Section roots by date / list / tag / etc. */
   groupBy?: TaskGroupBy
+  /** When groupBy is section, include empty TickTick sections in order. */
+  sections?: ProjectSection[]
+  /** Called when user clicks + under a section header. */
+  onAddInSection?: (sectionId: string | null) => void
+  /** View scope for persisting collapsed groups (e.g. project.abc). */
+  collapseScope?: string
 }
 
 export function TaskList({
@@ -38,6 +45,9 @@ export function TaskList({
   emptyDescription = 'Add a task above to get started',
   showEmptyState = true,
   groupBy = 'none',
+  sections,
+  onAddInSection,
+  collapseScope = 'default',
 }: TaskListProps) {
   const { toggleComplete } = useTaskMutations()
   const selectOne = useTaskSelectionStore((s) => s.selectOne)
@@ -94,10 +104,15 @@ export function TaskList({
   })
 
   const grouping = groupBy !== 'none'
-  const groups = useMemo(
-    () => (grouping ? groupTasks(visibleRootTasks, groupBy) : null),
-    [grouping, visibleRootTasks, groupBy],
-  )
+  const groups = useMemo(() => {
+    if (!grouping) return null
+    if (groupBy === 'section') {
+      return groupTasksBySection(visibleRootTasks, sections ?? [])
+    }
+    return groupTasks(visibleRootTasks, groupBy)
+  }, [grouping, visibleRootTasks, groupBy, sections])
+
+  const { isCollapsed, toggleCollapsed } = useCollapsedGroups(collapseScope, groupBy)
 
   // Virtualization skips section headers; keep grouped lists in the simple path.
   const useVirtual = !grouping && flatItems.length >= TASK_LIST_VIRTUALIZE_THRESHOLD
@@ -272,16 +287,51 @@ export function TaskList({
         </div>
       ) : groups ? (
         <div className="pb-4">
-          {groups.map((group) => (
-            <section key={group.key} className="pt-2">
-              {group.label ? (
-                <h3 className="sticky top-0 z-10 bg-bg-primary/95 px-6 py-2 text-xs font-semibold tracking-wide text-text-muted uppercase backdrop-blur-sm">
-                  {group.label}
-                </h3>
-              ) : null}
-              {group.tasks.map((task) => renderTaskNode(task, 0))}
-            </section>
-          ))}
+          {groups.map((group) => {
+            const expanded = !isCollapsed(group.key)
+            const count = group.tasks.length
+            return (
+              <section key={group.key} className="pt-2">
+                {group.label ? (
+                  <div className="sticky top-0 z-10 flex items-center gap-2 bg-bg-primary/95 px-4 py-1.5 backdrop-blur-sm sm:px-6">
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapsed(group.key)}
+                      className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1 text-left hover:bg-black/5 dark:hover:bg-white/5"
+                      aria-expanded={expanded}
+                    >
+                      <ChevronRight
+                        className={[
+                          'size-3.5 shrink-0 text-text-muted transition-transform duration-200 ease-out motion-reduce:transition-none',
+                          expanded ? 'rotate-90' : 'rotate-0',
+                        ].join(' ')}
+                      />
+                      <h3 className="truncate text-xs font-semibold tracking-wide text-text-muted uppercase">
+                        {group.label}
+                      </h3>
+                      {!expanded && (
+                        <span className="shrink-0 rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-text-muted dark:bg-white/10">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                    {onAddInSection && group.sectionId !== undefined ? (
+                      <button
+                        type="button"
+                        onClick={() => onAddInSection(group.sectionId ?? null)}
+                        className="shrink-0 px-1 text-xs font-medium text-accent hover:underline"
+                      >
+                        Add
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                <Collapse open={!group.label || expanded}>
+                  {group.tasks.map((task) => renderTaskNode(task, 0))}
+                </Collapse>
+              </section>
+            )
+          })}
           {hasMoreRoots && (
             <button
               type="button"

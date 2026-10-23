@@ -3,10 +3,12 @@ import type {
   BulkTaskPatch,
   CreateFolderInput,
   CreateProjectInput,
+  CreateSectionInput,
   CreateTagInput,
   CreateTaskInput,
   UpdateFolderInput,
   UpdateProjectInput,
+  UpdateSectionInput,
   UpdateTaskInput,
 } from '@shared/entities'
 import type { TaskFilter } from '@shared/filters'
@@ -102,6 +104,45 @@ export function handleFolderReorder(orderedIds: string[]) {
   })
 }
 
+export function handleSectionList(projectId: string) {
+  return runIpcHandler(() => getRepositories().sections.listByProject(projectId))
+}
+
+export function handleSectionCreate(input: CreateSectionInput) {
+  return runIpcHandler(() => {
+    const section = getRepositories().sections.create(input)
+    notifyChanged({ entityType: 'section', entityId: section.id, reason: 'local' })
+    getSyncEngine().broadcastStatus()
+    return section
+  })
+}
+
+export function handleSectionUpdate(id: string, input: UpdateSectionInput) {
+  return runIpcHandler(() => {
+    const section = getRepositories().sections.update(id, input)
+    notifyChanged({ entityType: 'section', entityId: section.id, reason: 'local' })
+    getSyncEngine().broadcastStatus()
+    return section
+  })
+}
+
+export function handleSectionDelete(id: string) {
+  return runIpcHandler(() => {
+    getRepositories().sections.softDelete(id)
+    notifyChanged({ entityType: 'section', entityId: id, reason: 'local' })
+    notifyChanged({ entityType: 'task', reason: 'local' })
+    getSyncEngine().broadcastStatus()
+  })
+}
+
+export function handleSectionReorder(projectId: string, orderedIds: string[]) {
+  return runIpcHandler(() => {
+    getRepositories().sections.reorder(projectId, orderedIds)
+    notifyChanged({ entityType: 'section', reason: 'local' })
+    getSyncEngine().broadcastStatus()
+  })
+}
+
 export function handleTaskList(filter?: TaskFilter) {
   return runIpcHandler(() => getRepositories().tasks.list(filter ?? {}))
 }
@@ -123,7 +164,13 @@ export function handleTaskGet(id: string) {
 
 export function handleTaskCreate(input: CreateTaskInput) {
   return runIpcHandler(() => {
-    const task = getRepositories().tasks.create(input)
+    const repos = getRepositories()
+    const hadDefault = Boolean(repos.sections.getDefaultForProject(input.project_id))
+    const task = repos.tasks.create(input)
+    // Creating into a sectioned list may auto-add "Not Sectioned"
+    if (!hadDefault && repos.sections.getDefaultForProject(input.project_id)) {
+      notifyChanged({ entityType: 'section', reason: 'local' })
+    }
     notifyChanged({ entityType: 'task', entityId: task.id, reason: 'local' })
     return task
   })

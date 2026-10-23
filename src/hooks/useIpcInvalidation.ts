@@ -28,6 +28,7 @@ export function useIpcInvalidation(): void {
         void queryClient.invalidateQueries({ queryKey: ['tasks'], refetchType: 'active' })
         void queryClient.invalidateQueries({ queryKey: ['projects'] })
         void queryClient.invalidateQueries({ queryKey: ['folders'] })
+        void queryClient.invalidateQueries({ queryKey: ['sections'] })
         void queryClient.invalidateQueries({ queryKey: ['tags'] })
         return
       }
@@ -47,6 +48,11 @@ export function useIpcInvalidation(): void {
         void queryClient.invalidateQueries({ queryKey: ['projects'] })
         return
       }
+      if (notification.entityType === 'section') {
+        void queryClient.invalidateQueries({ queryKey: ['sections'] })
+        void queryClient.invalidateQueries({ queryKey: ['tasks'], refetchType: 'active' })
+        return
+      }
       if (notification.entityType === 'tag') {
         void queryClient.invalidateQueries({ queryKey: ['tags'] })
         return
@@ -54,6 +60,7 @@ export function useIpcInvalidation(): void {
       void queryClient.invalidateQueries({ queryKey: ['tasks'], refetchType: 'active' })
       void queryClient.invalidateQueries({ queryKey: ['projects'] })
       void queryClient.invalidateQueries({ queryKey: ['folders'] })
+      void queryClient.invalidateQueries({ queryKey: ['sections'] })
       void queryClient.invalidateQueries({ queryKey: ['tags'] })
     })
 
