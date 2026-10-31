@@ -16,12 +16,16 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
-    "dev:seed": "electron-vite dev -- --seed",
+    "predev": "node scripts/ensure-sqlite-abi.mjs electron",
+    "dev:seed": "node scripts/ensure-sqlite-abi.mjs electron && electron-vite dev -- --seed",
     "build": "npm run typecheck && electron-vite build",
     "preview": "electron-vite preview",
+    "prepreview": "node scripts/ensure-sqlite-abi.mjs electron",
     "test": "vitest run",
+    "pretest": "node scripts/ensure-sqlite-abi.mjs node",
     "test:watch": "vitest",
-    "postinstall": "node -e \"if(process.env.CI){console.log('CI: skip electron-rebuild (Vitest needs Node ABI)');process.exit(0)}try{require('child_process').execSync('electron-rebuild -f -w better-sqlite3',{stdio:'inherit'})}catch(e){console.warn('electron-rebuild skipped:',e.message)}\"",
+    "pretest:watch": "node scripts/ensure-sqlite-abi.mjs node",
+    "postinstall": "node -e \"if(process.env.CI){console.log('CI: skip electron-rebuild (Vitest needs Node ABI)');process.exit(0)}require('child_process').execFileSync(process.execPath,['scripts/ensure-sqlite-abi.mjs','electron'],{stdio:'inherit'})\"",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
@@ -31,7 +35,9 @@
     "package:mac": "npm run build && npm run rebuild:native && electron-builder --mac --publish never",
     "package:linux": "npm run build && npm run rebuild:native && electron-builder --linux --publish never",
     "package": "npm run build && npm run rebuild:native && electron-builder --win --mac --linux --publish never",
-    "rebuild:native": "electron-rebuild -f -w better-sqlite3"
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
+    "ensure:electron-native": "node scripts/ensure-sqlite-abi.mjs electron",
+    "ensure:node-native": "node scripts/ensure-sqlite-abi.mjs node"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.80.7",

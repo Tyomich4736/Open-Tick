@@ -19,7 +19,12 @@ if [[ "$1" == "--appimage" || "$1" == "--packaged" ]]; then
     echo "No AppImage found in release/. Run npm run package:linux first."
     exit 1
   fi
-elif [[ "$1" == "--seed" ]]; then
+fi
+
+# Tests rebuild better-sqlite3 for Node; Electron needs its own ABI.
+node scripts/ensure-sqlite-abi.mjs electron
+
+if [[ "$1" == "--seed" ]]; then
   echo "Starting dev server with seed data..."
   exec npm run dev:seed
 else
