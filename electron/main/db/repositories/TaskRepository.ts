@@ -651,8 +651,8 @@ export class TaskRepository {
   }
 
   /**
-   * Synced pending tasks with a remote id — candidates when `/data` dropped them
-   * after remote complete/delete.
+   * Pending tasks with a remote id — candidates when `/data` dropped them after
+   * remote complete/delete. Includes pending_update so remote completion wins.
    */
   listSyncedPendingWithRemote(projectId: string): Array<{ id: string; remote_id: string }> {
     return this.db
@@ -661,7 +661,7 @@ export class TaskRepository {
          WHERE project_id = ?
            AND deleted_at IS NULL
            AND status = 'pending'
-           AND sync_status = 'synced'
+           AND sync_status IN ('synced', 'pending_update')
            AND remote_id IS NOT NULL`,
       )
       .all(projectId) as Array<{ id: string; remote_id: string }>
@@ -675,6 +675,40 @@ export class TaskRepository {
         `UPDATE tasks SET deleted_at = ?, updated_at = ?, sync_status = 'synced' WHERE id = ?`,
       )
       .run(now, now, id)
+  }
+
+  /**
+   * Apply remote completion even when the local row is dirty (remote wins on status).
+   */
+  applyRemoteCompletion(id: string, completedAt: string | null): Task {
+    const existing = this.getById(id)
+    if (!existing) throw new Error(`Task not found: ${id}`)
+    if (existing.status === 'completed' && !existing.deleted_at) return existing
+
+    const now = nowIso()
+    const updated: Task = {
+      ...existing,
+      status: 'completed',
+      completed_at: completedAt ?? existing.completed_at ?? now,
+      sync_status: 'synced',
+      updated_at: now,
+      deleted_at: null,
+    }
+    this.db
+      .prepare(
+        `UPDATE tasks SET
+           status = @status, completed_at = @completed_at, sync_status = @sync_status,
+           updated_at = @updated_at, deleted_at = NULL
+         WHERE id = @id`,
+      )
+      .run({
+        id: updated.id,
+        status: updated.status,
+        completed_at: updated.completed_at,
+        sync_status: updated.sync_status,
+        updated_at: updated.updated_at,
+      })
+    return updated
   }
 
   /** Pending outbound rows (includes soft-deleted pending_delete). */

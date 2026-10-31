@@ -12,6 +12,11 @@ import { notifySyncComplete } from '../ipc/notify'
 import { IPC_CHANNELS } from '@shared/channels'
 import { BrowserWindow } from 'electron'
 import { remoteFolderToLocal, remoteProjectToLocal, remoteTaskToLocal } from './mappers'
+import {
+  classifyVanishedTask,
+  completedPullSince,
+  completedPullWindowPlan,
+} from './reconcileVanished'
 import { resolveSectionIdForPull, upsertRemoteColumns } from './sectionPull'
 import { getTickTickClient, TickTickApiError } from '../ticktick/TickTickClient'
 import { pushDirtyEntities, type PushResult } from './pushDirty'
@@ -433,10 +438,11 @@ export class SyncEngine {
         await sleep(200)
       }
 
-      // `/data` omits completed tasks. Fetch a bounded completed window, then
-      // reconcile a capped number of vanished locals (avoids endless per-task GETs).
+      // `/data` omits completed tasks. Pull completions since last sync (capped lookback),
+      // then drop locals that vanished from `/data` and are not in that completed set.
       reportProgress('Pulling completed…', 'task')
       const completedRemoteIds = new Set<string>()
+      const completedAtByRemote = new Map<string, string | null>()
       try {
         const completedProjectIds = openProjects.map((p) => p.id)
         const inboxRemoteId = stateRepo.get().inbox_remote_id
@@ -444,13 +450,17 @@ export class SyncEngine {
           completedProjectIds.push(inboxRemoteId)
         }
 
-        const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-        const completedTasks = await client.listCompletedTasksSince(completedProjectIds, since, {
-          windowDays: 45,
-          maxWindows: 2,
-        })
+        const since = completedPullSince(stateRepo.get().last_full_sync_at)
+        const windowPlan = completedPullWindowPlan(since)
+        const completedTasks = await client.listCompletedTasksSince(
+          completedProjectIds,
+          since,
+          windowPlan,
+        )
         for (const t of completedTasks) {
-          if (t.id) completedRemoteIds.add(t.id)
+          if (!t.id) continue
+          completedRemoteIds.add(t.id)
+          completedAtByRemote.set(t.id, t.completedTime ?? null)
         }
         if (completedTasks.length > 0) {
           stats.tasks += this.upsertTaskBatch(completedTasks, projectIdByRemote, stats)
@@ -464,12 +474,10 @@ export class SyncEngine {
 
       reportProgress('Reconciling completed…', 'task')
       try {
-        stats.tasks += await this.reconcileVanishedTasks(
-          client,
+        stats.tasks += this.reconcileVanishedTasks(
           activeByProject,
           completedRemoteIds,
-          projectIdByRemote,
-          stats,
+          completedAtByRemote,
         )
       } catch (error) {
         partial = true
@@ -530,20 +538,16 @@ export class SyncEngine {
   }
 
   /**
-   * Local pending+synced tasks missing from `/data` were completed/deleted remotely.
-   * Prefer the completed-list batch; only GET individuals up to a hard cap so pull
-   * cannot stall on large stale sets.
+   * Local pending tasks missing from a successful `/data` pull were completed or
+   * deleted remotely. Apply completed-list hits; otherwise soft-delete locally.
+   * No per-task GETs — those were capped and left stale rows behind.
    */
-  private async reconcileVanishedTasks(
-    client: ReturnType<typeof getTickTickClient>,
+  private reconcileVanishedTasks(
     projects: Array<{ localId: string; remoteId: string; activeRemoteIds: Set<string> }>,
     alreadyCompletedRemoteIds: Set<string>,
-    projectIdByRemote: Map<string, string>,
-    stats: { skippedDirty: number },
-  ): Promise<number> {
+    completedAtByRemote: Map<string, string | null>,
+  ): number {
     const repos = getRepositories()
-    const MAX_GETS = 25
-    let gets = 0
     let count = 0
 
     for (const project of projects) {
@@ -552,30 +556,24 @@ export class SyncEngine {
         .filter((row) => !project.activeRemoteIds.has(row.remote_id))
 
       for (const row of missing) {
-        if (alreadyCompletedRemoteIds.has(row.remote_id)) {
-          // Already upserted from /task/completed — nothing else to do.
-          continue
-        }
-        if (gets >= MAX_GETS) {
-          console.warn('[sync] reconcile getTask cap reached; remaining vanish on next sync')
-          return count
-        }
-        gets += 1
-        try {
-          const remote = await client.getTask(project.remoteId, row.remote_id)
-          if (!remote) {
-            repos.tasks.markRemovedFromRemote(row.id)
-            count += 1
-            continue
-          }
-          count += this.upsertTaskBatch([remote], projectIdByRemote, stats, project.remoteId)
-        } catch (error) {
-          console.warn(
-            `[sync] reconcile ${row.remote_id} failed`,
-            error instanceof Error ? error.message : error,
+        const local = repos.tasks.getById(row.id)
+        if (!local || local.deleted_at) continue
+
+        const action = classifyVanishedTask({
+          localStatus: local.status,
+          inCompletedPull: alreadyCompletedRemoteIds.has(row.remote_id),
+        })
+
+        if (action === 'force_complete') {
+          repos.tasks.applyRemoteCompletion(
+            row.id,
+            completedAtByRemote.get(row.remote_id) ?? local.completed_at,
           )
+          count += 1
+        } else if (action === 'remove') {
+          repos.tasks.markRemovedFromRemote(row.id)
+          count += 1
         }
-        await sleep(50)
       }
     }
     return count
@@ -623,7 +621,19 @@ export class SyncEngine {
 
       const existing = repos.tasks.getByRemoteId(m.remote_id)
       if (existing && existing.sync_status !== 'synced') {
-        stats.skippedDirty += 1
+        // Remote completion wins over local dirty edits so pull does not leave
+        // TickTick-completed tasks stuck as pending.
+        if (
+          m.status === 'completed' &&
+          existing.status !== 'completed' &&
+          !existing.deleted_at
+        ) {
+          repos.tasks.applyRemoteCompletion(existing.id, m.completed_at)
+          remoteToLocalTask.set(m.remote_id, existing.id)
+          count += 1
+        } else {
+          stats.skippedDirty += 1
+        }
         continue
       }
 

@@ -18,6 +18,11 @@ export function mapRemoteStatus(value: number | undefined): 'pending' | 'complet
   return value === 2 ? 'completed' : 'pending'
 }
 
+/** Prefer explicit status; `/task/completed` rows also carry completedTime. */
+export function remoteTaskIsCompleted(remote: Pick<RemoteTask, 'status' | 'completedTime'>): boolean {
+  return mapRemoteStatus(remote.status) === 'completed' || Boolean(remote.completedTime)
+}
+
 export function mapRemoteViewMode(value: string | undefined): ProjectViewMode {
   if (value === 'kanban' || value === 'timeline') return value
   return 'list'
@@ -228,7 +233,7 @@ export function remoteTaskToLocal(remote: RemoteTask): MappedTask {
     title: (remote.title ?? '').trim() || 'Untitled',
     content: preserveMarkdownBlankLines(remote.content ?? remote.desc ?? ''),
     priority: mapRemotePriority(remote.priority),
-    status: mapRemoteStatus(remote.status),
+    status: remoteTaskIsCompleted(remote) ? 'completed' : 'pending',
     due_date,
     start_date,
     is_all_day: isAllDay,
@@ -238,7 +243,7 @@ export function remoteTaskToLocal(remote: RemoteTask): MappedTask {
     recurrence_rule: mapRemoteRecurrence(remote.repeatFlag),
     sort_order: typeof remote.sortOrder === 'number' ? remote.sortOrder : 0,
     remote_updated_at: remote.modifiedTime ?? null,
-    completed_at: remote.completedTime ?? null,
+    completed_at: remoteTaskIsCompleted(remote) ? remote.completedTime ?? null : null,
   }
 }
 

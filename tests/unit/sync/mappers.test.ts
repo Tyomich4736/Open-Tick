@@ -81,6 +81,17 @@ describe('sync mappers', () => {
     expect(task.recurrence_rule?.frequency).toBe('weekly')
   })
 
+  it('treats completedTime as completed even when status is omitted', () => {
+    const task = remoteTaskToLocal({
+      id: 't-done',
+      projectId: 'p1',
+      title: 'Finished',
+      completedTime: '2026-10-30T10:00:00.000+0000',
+    })
+    expect(task.status).toBe('completed')
+    expect(task.completed_at).toBe('2026-10-30T10:00:00.000+0000')
+  })
+
   it('collapses TickTick point-in-time start===due to due-only (UTC Z)', () => {
     expect(
       normalizeRemoteSchedule('2026-09-03T15:00:00+03:00', '2026-09-03T15:00:00+03:00'),
