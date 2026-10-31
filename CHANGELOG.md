@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1] - 2026-10-31
+
+### Fixed
+
+- Drag-and-drop of tasks between sections
+- List deletion issues
+
 ## [1.2.0] - 2026-10-31
 
 ### Added
