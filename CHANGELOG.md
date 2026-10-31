@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.0] - 2026-10-31
+
+### Added
+
+- Settings → Sync tab for TickTick sync options, including “Pull on application startup”
+
+### Fixed
+
+- Pull from TickTick no longer skips local dirty rows incorrectly, and correctly reconciles tasks completed or deleted remotely
+
 ## [1.1.0] - 2026-10-23
 
 ### Added
