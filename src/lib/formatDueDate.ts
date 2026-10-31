@@ -1,14 +1,13 @@
 import {
   addDays,
+  differenceInCalendarDays,
   format,
-  isThisWeek,
   isToday,
   isTomorrow,
   parseISO,
   startOfDay,
 } from 'date-fns'
 import type { TimeFormat } from '@/hooks/useTimeFormat'
-import { getWeekStartsOn } from '@/hooks/useWeekStartsOn'
 
 export { applyDueDaysFromNow, type DueScheduleFields } from '@shared/dueSchedule'
 
@@ -16,11 +15,17 @@ function timePattern(timeFormat: TimeFormat): string {
   return timeFormat === '24h' ? 'HH:mm' : 'h:mm a'
 }
 
-/** Today / Tomorrow / weekday (this week) / MMM d. */
-function formatDayPart(day: Date): string {
+/**
+ * Today / Tomorrow / weekday (within ±6 days) / MMM d (farther away).
+ * Rolling window so Sat→Mon still shows "Mon", not calendar-week "Nov 3".
+ */
+export function formatDayPart(day: Date, now = new Date()): string {
   if (isToday(day)) return 'Today'
   if (isTomorrow(day)) return 'Tomorrow'
-  if (isThisWeek(day, { weekStartsOn: getWeekStartsOn() })) return format(day, 'EEE')
+  const daysFromToday = differenceInCalendarDays(startOfDay(day), startOfDay(now))
+  if (daysFromToday >= -6 && daysFromToday <= 6 && daysFromToday !== 0) {
+    return format(day, 'EEE')
+  }
   return format(day, 'MMM d')
 }
 
@@ -93,7 +98,9 @@ export function formatDueRange(
     }
 
     if (sameDay) {
-      return `${format(startDate, tp)}–${format(endDate, tp)}`
+      // Today: times only; other days: weekday / month prefix (detail panel chip)
+      if (isToday(startDate)) return `${format(startDate, tp)}–${format(endDate, tp)}`
+      return `${formatDayPart(startDate)}, ${format(startDate, tp)}–${format(endDate, tp)}`
     }
     return `${formatDayPart(startDate)}, ${format(startDate, tp)} – ${formatDayPart(endDate)}, ${format(endDate, tp)}`
   } catch {
