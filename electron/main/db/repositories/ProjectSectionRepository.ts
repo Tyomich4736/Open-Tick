@@ -264,20 +264,93 @@ export class ProjectSectionRepository {
     return section
   }
 
-  /** After pull: flag Not Sectioned by name; create default if other columns exist without one. */
-  syncDefaultsAfterPull(projectId: string, hadColumnsArray: boolean): void {
-    if (!hadColumnsArray) return
-    this.markDefaultFromNames(projectId)
-    const listed = this.listByProject(projectId)
-    if (listed.length === 0) return
+  /**
+   * After pull (whether or not `columns` was present): normalize default aliases,
+   * ensure a single Not Sectioned when the list has sections, assign null tasks.
+   */
+  syncDefaultsAfterPull(projectId: string): void {
+    this.healDefaultSections(projectId)
+  }
+
+  /** Public heal used after task upsert and when listing sections. */
+  healDefaultSections(projectId: string): void {
+    this.mergeDefaultAliases(projectId)
+    const count =
+      (
+        this.db
+          .prepare(
+            `SELECT COUNT(*) as c FROM project_sections
+             WHERE project_id = ? AND deleted_at IS NULL`,
+          )
+          .get(projectId) as { c: number }
+      ).c ?? 0
+    if (count === 0) return
     this.ensureDefaultSection(projectId)
     this.assignNullTasksToDefault(projectId)
   }
 
+  /**
+   * Collapse “No section” / “Not Sectioned” / etc. into one default row named Not Sectioned.
+   */
+  private mergeDefaultAliases(projectId: string): void {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM project_sections
+         WHERE project_id = ? AND deleted_at IS NULL
+         ORDER BY sort_order ASC, name ASC`,
+      )
+      .all(projectId) as SectionRow[]
+
+    const aliases = rows.filter((r) => isDefaultSectionName(r.name))
+    if (aliases.length === 0) return
+
+    const keeper =
+      aliases.find((r) => r.remote_id) ??
+      aliases.find((r) => asBool(r.is_default)) ??
+      aliases[0]!
+
+    const now = nowIso()
+    const apply = this.db.transaction(() => {
+      this.clearDefaultFlags(projectId)
+      if (keeper.name !== DEFAULT_SECTION_NAME) {
+        this.db
+          .prepare(
+            `UPDATE project_sections SET name = ?, is_default = 1, updated_at = ? WHERE id = ?`,
+          )
+          .run(DEFAULT_SECTION_NAME, now, keeper.id)
+      } else {
+        this.db
+          .prepare(`UPDATE project_sections SET is_default = 1 WHERE id = ?`)
+          .run(keeper.id)
+      }
+
+      for (const row of aliases) {
+        if (row.id === keeper.id) continue
+        this.db
+          .prepare(
+            `UPDATE tasks SET section_id = ?, updated_at = ?
+             WHERE section_id = ? AND deleted_at IS NULL`,
+          )
+          .run(keeper.id, now, row.id)
+        this.db
+          .prepare(
+            `UPDATE project_sections SET
+               deleted_at = ?, updated_at = ?, sync_status = ?, is_default = 0
+             WHERE id = ?`,
+          )
+          .run(
+            now,
+            now,
+            row.remote_id ? 'pending_delete' : 'synced',
+            row.id,
+          )
+      }
+    })
+    apply()
+  }
+
   markDefaultFromNames(projectId: string): void {
-    const listed = this.listByProject(projectId)
-    const named = listed.find((s) => isDefaultSectionName(s.name))
-    if (named) this.setAsDefault(named.id, projectId)
+    this.mergeDefaultAliases(projectId)
   }
 
   private setAsDefault(sectionId: string, projectId: string): void {
@@ -319,12 +392,14 @@ export class ProjectSectionRepository {
         .all(projectId) as SectionRow[]
 
     let rows = query()
-    // Heal lists that have sections but no default bucket (e.g. pre-flag data)
     if (
       rows.length > 0 &&
       !rows.some((r) => asBool(r.is_default) || isDefaultSectionName(r.name))
     ) {
-      this.ensureDefaultSection(projectId)
+      this.healDefaultSections(projectId)
+      rows = query()
+    } else if (rows.some((r) => isDefaultSectionName(r.name) && r.name !== DEFAULT_SECTION_NAME)) {
+      this.healDefaultSections(projectId)
       rows = query()
     }
     return rows.map(mapSection)

@@ -90,6 +90,21 @@ describe('section pull mapping', () => {
     expect(repos.sections.listByProject(project.id)).toHaveLength(before)
   })
 
+  it('heals Not Sectioned when columns are omitted but sections already exist', () => {
+    const project = repos.projects.create({ name: 'Work' })
+    repos.sections.upsertFromRemote({
+      remote_id: 'col-doing',
+      project_id: project.id,
+      name: 'Doing',
+      sort_order: 0,
+      remote_updated_at: null,
+    })
+    expect(repos.sections.getDefaultForProject(project.id)).toBeNull()
+
+    upsertRemoteColumns(repos, project.id, undefined)
+    expect(repos.sections.getDefaultForProject(project.id)?.name).toBe('Not Sectioned')
+  })
+
   it('reconciles removed columns when columns array is present', () => {
     const project = repos.projects.create({ name: 'Work' })
     upsertRemoteColumns(repos, project.id, [
@@ -114,7 +129,7 @@ describe('section pull mapping', () => {
       sort_order: 0,
       remote_updated_at: null,
     })
-    repos.sections.syncDefaultsAfterPull(project.id, true)
+    repos.sections.syncDefaultsAfterPull(project.id)
     expect(resolveSectionIdForPull(repos, 'col-missing', section.id, project.id)).toBe(section.id)
     expect(resolveSectionIdForPull(repos, 'col-known', null, project.id)).toBe(section.id)
   })

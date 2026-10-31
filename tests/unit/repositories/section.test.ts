@@ -77,6 +77,39 @@ describe('ProjectSectionRepository', () => {
     expect(listed.some((s) => s.is_default && s.name === 'Not Sectioned')).toBe(true)
   })
 
+  it('merges No section alias into Not Sectioned and assigns null tasks', () => {
+    const inbox = repos.projects.ensureInbox()
+    const alias = repos.sections.upsertFromRemote({
+      remote_id: 'col-ns',
+      project_id: inbox.id,
+      name: 'No Section',
+      sort_order: -1,
+      remote_updated_at: null,
+    })
+    repos.sections.upsertFromRemote({
+      remote_id: 'col-doing',
+      project_id: inbox.id,
+      name: 'Doing',
+      sort_order: 0,
+      remote_updated_at: null,
+    })
+    const loose = repos.tasks.create({ title: 'Loose', project_id: inbox.id, section_id: null })
+    // Bypass resolveSectionId by clearing after create if needed
+    repos.db
+      .prepare(`UPDATE tasks SET section_id = NULL WHERE id = ?`)
+      .run(loose.id)
+
+    repos.sections.healDefaultSections(inbox.id)
+
+    const listed = repos.sections.listByProject(inbox.id)
+    const defaults = listed.filter((s) => s.is_default)
+    expect(defaults).toHaveLength(1)
+    expect(defaults[0]?.name).toBe('Not Sectioned')
+    expect(defaults[0]?.id).toBe(alias.id)
+    expect(listed.some((s) => s.name === 'No Section')).toBe(false)
+    expect(repos.tasks.getById(loose.id)?.section_id).toBe(alias.id)
+  })
+
   it('forbids deleting the default section', () => {
     const inbox = repos.projects.ensureInbox()
     repos.sections.create({ project_id: inbox.id, name: 'Doing' })

@@ -13,23 +13,24 @@ export function upsertRemoteColumns(
   localProjectId: string,
   columns: RemoteColumn[] | undefined | null,
 ): void {
-  if (!Array.isArray(columns)) return
-
-  const activeRemoteIds = new Set<string>()
-  for (const col of columns) {
-    if (!col?.id) continue
-    const mapped = remoteColumnToLocal(col)
-    repos.sections.upsertFromRemote({
-      remote_id: mapped.remote_id,
-      project_id: localProjectId,
-      name: mapped.name,
-      sort_order: mapped.sort_order,
-      remote_updated_at: mapped.remote_updated_at,
-    })
-    activeRemoteIds.add(mapped.remote_id)
+  if (Array.isArray(columns)) {
+    const activeRemoteIds = new Set<string>()
+    for (const col of columns) {
+      if (!col?.id) continue
+      const mapped = remoteColumnToLocal(col)
+      repos.sections.upsertFromRemote({
+        remote_id: mapped.remote_id,
+        project_id: localProjectId,
+        name: mapped.name,
+        sort_order: mapped.sort_order,
+        remote_updated_at: mapped.remote_updated_at,
+      })
+      activeRemoteIds.add(mapped.remote_id)
+    }
+    repos.sections.reconcileMissingRemote(localProjectId, activeRemoteIds)
   }
-  repos.sections.reconcileMissingRemote(localProjectId, activeRemoteIds)
-  repos.sections.syncDefaultsAfterPull(localProjectId, true)
+  // Always heal — `/data` often omits `columns` for list-mode projects.
+  repos.sections.healDefaultSections(localProjectId)
 }
 
 /**

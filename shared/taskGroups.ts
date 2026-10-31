@@ -8,6 +8,7 @@ import {
 } from 'date-fns'
 import type { Priority, ProjectSection, TaskListItem } from './entities'
 import type { TaskGroupBy } from './filters'
+import { DEFAULT_SECTION_NAME, isDefaultSectionName } from './sections'
 
 export interface TaskGroup {
   key: string
@@ -117,20 +118,23 @@ export function groupTasks(tasks: TaskListItem[], groupBy: TaskGroupBy): TaskGro
         // Prefer groupTasksBySection when the full section list is available
         // (includes empty sections). Fallback groups only populated sections.
         if (task.section_id) {
+          const label = isDefaultSectionName(task.section_name ?? '')
+            ? DEFAULT_SECTION_NAME
+            : task.section_name?.trim() || 'Untitled'
           const group = pushGroup(
             map,
             task.section_id,
-            task.section_name?.trim() || 'Untitled',
+            label,
             task.section_sort ?? 0,
             task,
           )
           group.sectionId = task.section_id
         } else {
-          // Legacy null section_id — treat as Not Sectioned bucket
+          // Legacy null section_id — single Not Sectioned bucket
           const group = pushGroup(
             map,
             'not-sectioned',
-            'Not Sectioned',
+            DEFAULT_SECTION_NAME,
             Number.POSITIVE_INFINITY,
             task,
           )
@@ -163,7 +167,9 @@ export function groupTasksBySection(
 
   const groups: TaskGroup[] = sections.map((section) => ({
     key: section.id,
-    label: section.name.trim() || 'Untitled',
+    label: isDefaultSectionName(section.name)
+      ? DEFAULT_SECTION_NAME
+      : section.name.trim() || 'Untitled',
     sort: section.sort_order,
     tasks: [],
     sectionId: section.id,
@@ -171,7 +177,7 @@ export function groupTasksBySection(
   const byId = new Map(groups.map((g) => [g.key, g]))
   let defaultGroup =
     groups.find((_, i) => sections[i]?.is_default) ??
-    groups.find((g) => g.label.trim().toLowerCase() === 'not sectioned') ??
+    groups.find((g) => isDefaultSectionName(g.label)) ??
     null
 
   const orphans: TaskListItem[] = []
@@ -189,7 +195,7 @@ export function groupTasksBySection(
   if (orphans.length > 0 && !defaultGroup) {
     defaultGroup = {
       key: 'not-sectioned',
-      label: 'Not Sectioned',
+      label: DEFAULT_SECTION_NAME,
       sort: Number.NEGATIVE_INFINITY,
       tasks: orphans,
       sectionId: null,

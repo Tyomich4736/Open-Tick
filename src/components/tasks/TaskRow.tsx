@@ -80,7 +80,7 @@ export const TaskRow = memo(function TaskRow({
         }
       }}
       className={[
-        'group relative flex items-center gap-2 border-b border-border px-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent',
+        'group relative flex items-center gap-2 border-b border-border px-4 transition-colors select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent',
         padY,
         draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
         selected ? 'border-l-2 border-l-accent bg-accent/5' : 'border-l-2 border-l-transparent',

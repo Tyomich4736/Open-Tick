@@ -99,12 +99,17 @@ export function useTaskTreeData(filter: TaskFilter) {
   const childrenCacheRef = useRef(new Map<string, TaskListItem[]>())
   useEffect(() => {
     for (const [id, kids] of childrenByParent) {
-      if (kids.length > 0) childrenCacheRef.current.set(id, kids)
+      // Always sync (including []) so promoted/removed children don't linger.
+      childrenCacheRef.current.set(id, kids)
     }
   }, [childrenByParent])
 
   function getChildren(parentId: string): TaskListItem[] {
-    return childrenByParent.get(parentId) ?? childrenCacheRef.current.get(parentId) ?? []
+    // Prefer live query maps (including optimistic [] after un-nest) over the ref.
+    if (childrenByParent.has(parentId)) return childrenByParent.get(parentId)!
+    const fromQuery = queryClient.getQueryData<TaskListItem[]>(queryKeys.subtasks(parentId))
+    if (fromQuery) return fromQuery
+    return childrenCacheRef.current.get(parentId) ?? []
   }
 
   const parentById = useMemo(() => {

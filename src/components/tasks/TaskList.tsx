@@ -14,7 +14,11 @@ import {
   useTaskTreeData,
 } from '@/hooks/useTaskTreeData'
 import { useTaskListDnD } from '@/hooks/useTaskListDnD'
-import { isTaskExpanded, type FlatItem } from '@/lib/taskTree'
+import {
+  isTaskExpanded,
+  orderedIdsFromGroupedRoots,
+  type FlatItem,
+} from '@/lib/taskTree'
 import { useUiStore } from '@/stores/uiStore'
 import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -81,22 +85,23 @@ export function TaskList({
     setLocalRootOrder,
   } = tree
 
-  orderedVisibleIdsRef.current = orderedVisibleIds
-
+  const sectionMode = groupBy === 'section'
   const dnd = useTaskListDnD({
     allowReorder,
     listRef,
     rootTasks,
     parentById,
     getChildren,
-    expandedTaskIds,
     setLocalRootOrder,
+    sectionMode,
   })
 
   useEffect(() => {
-    dnd.clearDragState()
+    // Reset UI chrome only — avoid scheduling deferred ref clears that can
+    // race a drag the user starts right after a filter change.
+    dnd.setDropIndicator(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey, filter.search, tasks.length])
+  }, [filterKey, filter.search])
 
   useEffect(() => {
     scrollParentRef.current =
@@ -113,6 +118,18 @@ export function TaskList({
   }, [grouping, visibleRootTasks, groupBy, sections])
 
   const { isCollapsed, toggleCollapsed } = useCollapsedGroups(collapseScope, groupBy)
+
+  // Shift-select must follow on-screen order. Ungrouped flatItems use sort_order,
+  // which interleaves sections and wrongly selects foreign-section tasks.
+  const selectionOrderedIds = useMemo(() => {
+    if (!groups) return orderedVisibleIds
+    const visibleGroupRoots = groups
+      .filter((group) => !group.label || !isCollapsed(group.key))
+      .map((group) => group.tasks)
+    return orderedIdsFromGroupedRoots(visibleGroupRoots, expandedTaskIds, getChildren)
+  }, [groups, orderedVisibleIds, isCollapsed, expandedTaskIds, getChildren])
+
+  orderedVisibleIdsRef.current = selectionOrderedIds
 
   // Virtualization skips section headers; keep grouped lists in the simple path.
   const useVirtual = !grouping && flatItems.length >= TASK_LIST_VIRTUALIZE_THRESHOLD
@@ -170,23 +187,19 @@ export function TaskList({
         }
         onDragStart={(e) => {
           if (!allowReorder) return
-          dnd.suppressClickRef.current = true
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', task.id)
-          dnd.setDragId(task.id)
+          dnd.beginRowDrag(task.id, e.dataTransfer)
         }}
         onDragEnd={() => {
           dnd.clearDragState()
-          window.setTimeout(() => {
-            dnd.suppressClickRef.current = false
-          }, 0)
         }}
         onDragOver={(e) => dnd.onRowDragOver(e, task.id)}
         onDrop={(e) => {
           e.preventDefault()
+          e.stopPropagation()
+          const draggedId = e.dataTransfer.getData('text/plain')
           const ind = dnd.dropIndicatorRef.current
           const position = ind?.targetId === task.id ? ind.position : 'before'
-          dnd.commitDrop(task.id, position)
+          dnd.commitDrop(task.id, position, draggedId || undefined)
         }}
         onSelect={(e) => {
           if (dnd.suppressClickRef.current) return
@@ -327,7 +340,35 @@ export function TaskList({
                   </div>
                 ) : null}
                 <Collapse open={!group.label || expanded}>
-                  {group.tasks.map((task) => renderTaskNode(task, 0))}
+                  <div
+                    onDragOver={
+                      sectionMode && allowReorder ? (e) => dnd.onSectionDragOver(e) : undefined
+                    }
+                    onDrop={
+                      sectionMode && allowReorder
+                        ? (e) => {
+                            // Rows stopPropagation; this catches gaps / header padding inside the section.
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const draggedId = e.dataTransfer.getData('text/plain')
+                            dnd.commitDropToSection(
+                              group.sectionId ?? null,
+                              draggedId || undefined,
+                            )
+                          }
+                        : undefined
+                    }
+                  >
+                    {group.tasks.length === 0 && sectionMode && allowReorder ? (
+                      <div className="mx-4 mb-1 rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-text-muted sm:mx-6">
+                        Drop tasks here
+                      </div>
+                    ) : null}
+                    {group.tasks.map((task) => renderTaskNode(task, 0))}
+                    {group.tasks.length > 0 && sectionMode && allowReorder && dnd.dragId ? (
+                      <div className="mx-4 h-2 sm:mx-6" aria-hidden />
+                    ) : null}
+                  </div>
                 </Collapse>
               </section>
             )

@@ -410,6 +410,7 @@ export class SyncEngine {
         if (inboxRemoteId) {
           const inboxLocalId = projectIdByRemote.get(inboxRemoteId)
           if (inboxLocalId) {
+            repos.sections.assignNullTasksToDefault(inboxLocalId)
             activeByProject.push({
               localId: inboxLocalId,
               remoteId: inboxRemoteId,
@@ -439,6 +440,7 @@ export class SyncEngine {
           }
           stats.tasks += this.upsertTaskBatch(tasks, projectIdByRemote, stats, remote.id)
           if (localProjectId) {
+            repos.sections.assignNullTasksToDefault(localProjectId)
             activeByProject.push({
               localId: localProjectId,
               remoteId: remote.id,

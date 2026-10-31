@@ -78,6 +78,21 @@ export function flattenTaskTree(
   return items
 }
 
+/**
+ * Visible top-to-bottom ids for shift-select when the list is grouped
+ * (e.g. by section). Must match on-screen order, not raw sort_order —
+ * otherwise a range inside one section can include tasks from another.
+ */
+export function orderedIdsFromGroupedRoots(
+  groupRoots: TaskListItem[][],
+  expandedTaskIds: Record<string, boolean>,
+  getChildren: (parentId: string) => TaskListItem[],
+): string[] {
+  return groupRoots.flatMap((roots) =>
+    flattenTaskTree(roots, expandedTaskIds, getChildren).map((item) => item.task.id),
+  )
+}
+
 export function reorderSiblingIds(
   siblingIds: string[],
   dragTaskId: string,
@@ -89,5 +104,22 @@ export function reorderSiblingIds(
   return next
 }
 
-export type DropPosition = 'before' | 'after' | 'into'
-export type DropIndicator = { targetId: string; position: DropPosition }
+export function sameIdOrder(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i])
+}
+
+/** Walk to the top-level ancestor (parent_id null) for list insertion. */
+export function rootAncestorId(
+  taskId: string,
+  parentById: Map<string, string | null>,
+): string {
+  let current = taskId
+  const seen = new Set<string>()
+  while (true) {
+    if (seen.has(current)) return current
+    seen.add(current)
+    const parent = parentById.get(current)
+    if (parent == null) return current
+    current = parent
+  }
+}
