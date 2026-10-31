@@ -166,7 +166,8 @@ async function pushProject(project: Project): Promise<void> {
     if (project.remote_id) {
       await client.deleteProject(project.remote_id)
     }
-    repos.projects.hardDelete(project.id)
+    // Cascade: tasks → sections → project (plain DELETE FROM projects hits FK)
+    repos.projects.hardDeleteCascade(project.id)
     return
   }
 

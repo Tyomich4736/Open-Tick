@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useLocation, useNavigate } from 'react-router-dom'
 import type {
   BulkTaskPatch,
   CreateProjectInput,
@@ -15,6 +16,7 @@ import {
   setTaskStatusInCaches,
   suppressTaskInvalidation,
 } from '@/lib/taskQueryCache'
+import { useSmartListSettings } from '@/hooks/useSmartListSettings'
 import { useToastStore } from '@/stores/toastStore'
 import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
 
@@ -196,10 +198,15 @@ export function useTaskMutations() {
 export function useProjectMutations() {
   const queryClient = useQueryClient()
   const addToast = useToastStore((s) => s.addToast)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { defaultPath } = useSmartListSettings()
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['projects'] })
     void queryClient.invalidateQueries({ queryKey: ['folders'] })
+    void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    void queryClient.invalidateQueries({ queryKey: ['sections'] })
   }
 
   const createProject = useMutation({
@@ -222,9 +229,14 @@ export function useProjectMutations() {
 
   const deleteProject = useMutation({
     mutationFn: (id: string) => ipcCall(() => ipc.projects.delete(id), 'Failed to delete list'),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       invalidate()
       addToast('List deleted', 'success')
+      useTaskSelectionStore.getState().clear()
+      // Same landing view as app startup (first enabled smart list).
+      if (location.pathname === `/project/${id}`) {
+        navigate(defaultPath, { replace: true })
+      }
     },
   })
 

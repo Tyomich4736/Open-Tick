@@ -175,18 +175,47 @@ export class ProjectRepository {
     if (!existing) throw new Error(`List not found: ${id}`)
     if (existing.is_inbox) throw new Error('Cannot delete the inbox list')
 
+    // Never synced remotely — drop the whole subtree immediately (FK-safe).
+    if (!existing.remote_id) {
+      this.hardDeleteCascade(id)
+      return
+    }
+
     const now = nowIso()
-    this.db
-      .prepare(
-        `UPDATE projects SET deleted_at = @deleted_at, updated_at = @updated_at, sync_status = @sync_status
-         WHERE id = @id`,
-      )
-      .run({
-        id,
-        deleted_at: now,
-        updated_at: now,
-        sync_status: existing.remote_id ? 'pending_delete' : 'synced',
-      })
+    const run = this.db.transaction(() => {
+      // Hide children from UI / smart lists; remote project delete will drop them.
+      this.db
+        .prepare(
+          `UPDATE tasks SET
+             deleted_at = @now, updated_at = @now,
+             sync_status = CASE
+               WHEN remote_id IS NOT NULL THEN 'pending_delete'
+               ELSE 'synced'
+             END
+           WHERE project_id = @id AND deleted_at IS NULL`,
+        )
+        .run({ now, id })
+
+      this.db
+        .prepare(
+          `UPDATE project_sections SET
+             deleted_at = @now, updated_at = @now,
+             sync_status = CASE
+               WHEN remote_id IS NOT NULL THEN 'pending_delete'
+               ELSE 'synced'
+             END
+           WHERE project_id = @id AND deleted_at IS NULL`,
+        )
+        .run({ now, id })
+
+      this.db
+        .prepare(
+          `UPDATE projects SET deleted_at = @now, updated_at = @now, sync_status = 'pending_delete'
+           WHERE id = @id`,
+        )
+        .run({ now, id })
+    })
+    run()
   }
 
   getById(id: string): Project | null {
@@ -285,7 +314,23 @@ export class ProjectRepository {
   }
 
   hardDelete(id: string): void {
-    this.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
+    this.hardDeleteCascade(id)
+  }
+
+  /**
+   * Remove a list and its local children. Order matters: tasks hold FKs to
+   * sections and to parent tasks; sections hold FKs to projects.
+   */
+  hardDeleteCascade(id: string): void {
+    const run = this.db.transaction(() => {
+      this.db.prepare(`UPDATE tasks SET parent_id = NULL WHERE project_id = ?`).run(id)
+      this.db.prepare(`UPDATE tasks SET section_id = NULL WHERE project_id = ?`).run(id)
+      // task_tags / reminders / sticky_notes cascade from tasks
+      this.db.prepare(`DELETE FROM tasks WHERE project_id = ?`).run(id)
+      this.db.prepare(`DELETE FROM project_sections WHERE project_id = ?`).run(id)
+      this.db.prepare(`DELETE FROM projects WHERE id = ?`).run(id)
+    })
+    run()
   }
 
   private getByRemoteIdAny(remoteId: string): Project | null {
