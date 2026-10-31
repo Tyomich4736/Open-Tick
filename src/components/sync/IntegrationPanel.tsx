@@ -297,7 +297,7 @@ export function IntegrationPanel() {
                 <p className="text-xs text-amber-700 dark:text-amber-300">
                   {status.pushEnabled
                     ? 'Pending push'
-                    : 'Pending push — enable in Settings → Account'}
+                    : 'Pending push — enable in Settings → Sync'}
                 </p>
                 <p className="mt-0.5 text-sm">
                   {status.pendingPush.total} changes · {status.pendingPush.tasks} tasks ·{' '}
@@ -362,7 +362,7 @@ export function IntegrationPanel() {
               }
               title={
                 !status.pushEnabled
-                  ? 'Enable push in Settings → Account first'
+                  ? 'Enable push in Settings → Sync first'
                   : (status.pendingPush?.total ?? 0) === 0
                     ? 'No local changes to push'
                     : undefined

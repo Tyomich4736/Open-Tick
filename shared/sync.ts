@@ -37,7 +37,7 @@ export interface SyncStatusDto {
   lastSyncResult: 'success' | 'partial' | 'failed' | null
   lastError: string | null
   lastErrorAt: string | null
-  /** When false, outbound push is opted out (Settings → Account). */
+  /** When false, outbound push is opted out (Settings → Sync). */
   pushEnabled: boolean
   pendingPush: SyncPendingPush
   conflicts: number

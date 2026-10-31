@@ -22,7 +22,7 @@ Open Tick is local-first. TickTick plan limits only matter when you pull from or
 1. Use a dedicated TickTick test account. Do not use a personal account while push is enabled.
 2. Prefix every list, folder, and task you create with `QA-` so it is easy to delete afterward.
 3. In **Settings → Account**, save Client ID, Client Secret, region, and redirect URI (`http://127.0.0.1:18463/callback` must match the developer portal).
-4. Leave **Enable push to TickTick** off until a case says to turn it on. Push is off by default.
+4. Leave **Settings → Sync → Enable push to TickTick** off until a case says to turn it on. Push is off by default.
 5. After connect, confirm the Integration panel shows a successful pull before you edit anything.
 6. Compare results in the official TickTick app or on [ticktick.com](https://ticktick.com) after each push or pull.
 7. When switching between free and premium, disconnect, then start from a clean local database (export a backup first, or use a separate OS user / fresh `userData`). Leftover local rows will mix the two accounts.
@@ -326,7 +326,7 @@ Do these on **both** accounts after a clean local database. Create the remote da
 
 ## 14. Push
 
-Turn on **Settings → Account → Enable push to TickTick** only for this section. Push from the Integration panel (**Push now**). Then confirm in the official TickTick app.
+Turn on **Settings → Sync → Enable push to TickTick** only for this section. Push from the Integration panel (**Push now**). Then confirm in the official TickTick app.
 
 Run every **Both** row on free and on premium.
 

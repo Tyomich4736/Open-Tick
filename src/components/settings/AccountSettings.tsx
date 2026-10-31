@@ -37,16 +37,10 @@ export function AccountSettings() {
   const [hasPat, setHasPat] = useState(false)
   const [fromEnv, setFromEnv] = useState(false)
   const [credsBusy, setCredsBusy] = useState(false)
-  const [pushEnabled, setPushEnabled] = useState(false)
 
   const refreshAuth = useCallback(async () => {
     const result = await ipc.auth.status()
     if (result.ok) setAuth(result.data)
-  }, [])
-
-  const refreshPushSetting = useCallback(async () => {
-    const res = await ipc.settings.get<boolean>('sync.push_enabled')
-    if (res.ok) setPushEnabled(!!res.data)
   }, [])
 
   const refreshCredentials = useCallback(async () => {
@@ -69,8 +63,7 @@ export function AccountSettings() {
   useEffect(() => {
     void refreshAuth()
     void refreshCredentials()
-    void refreshPushSetting()
-  }, [refreshAuth, refreshCredentials, refreshPushSetting])
+  }, [refreshAuth, refreshCredentials])
 
   async function saveCreds() {
     setCredsBusy(true)
@@ -114,8 +107,6 @@ export function AccountSettings() {
           'success',
         )
 
-        // Refresh push setting after connect in case it affects visibility
-        void refreshPushSetting()
         setIntegrationOpen(true)
       } else if (!/cancelled|canceled/i.test(result.error.message)) {
         addToast(result.error.message, 'error')
@@ -187,24 +178,6 @@ export function AccountSettings() {
           Secrets are encrypted on this device. Environment variables still work as a fallback.
         </p>
 
-        <div className="mt-4 rounded-lg border border-border p-4">
-          <label className="flex items-center gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={pushEnabled}
-              onChange={async (e) => {
-                const next = e.target.checked
-                setPushEnabled(next)
-                await ipc.settings.set('sync.push_enabled', next)
-              }}
-              className="size-4 accent-[var(--color-accent)]"
-            />
-            <span className="font-medium text-text-primary">Enable push to TickTick</span>
-          </label>
-          <p className="mt-1.5 text-xs text-text-muted">
-            When enabled, local changes will be sent to TickTick. <span className="font-semibold text-amber-600 dark:text-amber-400">Use with caution.</span>
-          </p>
-        </div>
         {fromEnv && (
           <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
             Currently using values from environment variables. Saving here overrides them for this

@@ -6,6 +6,7 @@ import { CalendarSettings } from '@/components/settings/CalendarSettings'
 import { DesktopSettings } from '@/components/settings/DesktopSettings'
 import { NotificationsSettings } from '@/components/settings/NotificationsSettings'
 import { SmartListsSettings } from '@/components/settings/SmartListsSettings'
+import { SyncSettings } from '@/components/settings/SyncSettings'
 import { useTimeFormat, type TimeFormat } from '@/hooks/useTimeFormat'
 import { useListDensity } from '@/hooks/useLayoutSettings'
 import { listTimezones, useTimezone } from '@/hooks/useTimezone'
@@ -18,6 +19,7 @@ type SettingsTab =
   | 'desktop'
   | 'notifications'
   | 'account'
+  | 'sync'
   | 'about'
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -28,6 +30,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'desktop', label: 'Desktop' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'account', label: 'Account' },
+  { id: 'sync', label: 'Sync' },
   { id: 'about', label: 'About' },
 ]
 
@@ -142,6 +145,7 @@ export function SettingsPage() {
         {tab === 'desktop' && <DesktopSettings />}
         {tab === 'notifications' && <NotificationsSettings />}
         {tab === 'account' && <AccountSettings />}
+        {tab === 'sync' && <SyncSettings />}
         {tab === 'about' && <AboutSettings />}
       </div>
     </div>

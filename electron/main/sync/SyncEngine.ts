@@ -2,7 +2,7 @@ import { net } from 'electron'
 
 /**
  * Sync engine — inbound pull (Phase 13) + outbound push (Phase 14).
- * Push is gated behind Settings → `sync.push_enabled` (default false).
+ * Push is gated behind Settings → Sync → `sync.push_enabled` (default false).
  */
 import type { SyncStatusDto, SyncProgressEvent, SyncPullResult } from '@shared/sync'
 import { TICKTICK_SETTING_KEYS } from '@shared/ticktickCredentials'
@@ -171,7 +171,25 @@ export class SyncEngine {
   }
 
   /**
-   * Outbound push — requires Settings → Enable push to TickTick.
+   * Optional startup pull (Settings → Sync). No-ops when disabled, offline, or disconnected.
+   */
+  maybePullOnStartup(): void {
+    const enabled =
+      getRepositories().settings.get<boolean>(TICKTICK_SETTING_KEYS.pullOnStartup) === true
+    if (!enabled) return
+    if (!getTokenService().isConnected()) return
+    if (!net.isOnline()) return
+
+    void this.runFullPull().catch((error) => {
+      console.warn(
+        '[sync] startup pull failed',
+        error instanceof Error ? error.message : error,
+      )
+    })
+  }
+
+  /**
+   * Outbound push — requires Settings → Sync → Enable push to TickTick.
    * Processes dirty pending_* folders, projects, and tasks.
    */
   async runPushIfEnabled(): Promise<PushResult> {
@@ -182,7 +200,7 @@ export class SyncEngine {
       return {
         ran: false,
         processed: 0,
-        errors: ['Push is disabled (enable in Settings → Account)'],
+        errors: ['Push is disabled (enable in Settings → Sync)'],
       }
     }
 

@@ -13,6 +13,7 @@ import { createMainWindow, setAllowQuit, showOrCreateMainWindow } from './ipc/ha
 import { createAppTray } from './tray'
 import { applyDesktopSettings, isMinimizeToTrayEnabled } from './desktop/desktopSettings'
 import { startReminderScheduler, stopReminderScheduler } from './notifications/reminderScheduler'
+import { getSyncEngine } from './sync/SyncEngine'
 
 /** Must match electron-builder `appId` so Windows toasts show the real app name. */
 const APP_ID = 'com.opentick.app'
@@ -117,6 +118,14 @@ async function startApp(): Promise<void> {
         logStartup('restoreStickyWindows failed', err)
       }
     }, 500)
+    // Defer so the window can paint before a possibly long pull.
+    setTimeout(() => {
+      try {
+        getSyncEngine().maybePullOnStartup()
+      } catch (err) {
+        logStartup('Startup pull failed to start', err)
+      }
+    }, 1500)
     logStartup('Main window created')
   } catch (err) {
     logStartup('Fatal while creating window', err)

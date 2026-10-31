@@ -14,6 +14,8 @@ export const TICKTICK_SETTING_KEYS = {
   lastErrorAt: 'sync.last_error_at',
   lastPullStats: 'sync.last_pull_stats',
   pushEnabled: 'sync.push_enabled',
+  /** When true, run a full pull after the app finishes starting (requires connection). */
+  pullOnStartup: 'sync.pull_on_startup',
 } as const
 
 export type TickTickRegion = 'ticktick' | 'dida365'
