@@ -16,6 +16,30 @@ export function useAppShellDesktopEffects(onTogglePalette: () => void) {
         e.preventDefault()
         onTogglePalette()
       }
+      // Ctrl/Cmd+S — push local changes to TickTick (not Ctrl+Shift+S)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        void ipc.sync.push().then((res) => {
+          const toast = useToastStore.getState().addToast
+          if (!res.ok) {
+            toast(res.error.message, 'error')
+            return
+          }
+          const { processed, errors, ran } = res.data
+          if (errors.length) {
+            toast(errors[0] ?? 'Push finished with errors', 'error')
+            return
+          }
+          if (!ran) {
+            toast('Push did not run', 'info')
+            return
+          }
+          toast(
+            processed === 0 ? 'Nothing to push' : `Pushed ${processed} items`,
+            processed === 0 ? 'info' : 'success',
+          )
+        })
+      }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault()
         setIntegrationOpen(true)
