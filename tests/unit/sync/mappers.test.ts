@@ -128,8 +128,8 @@ describe('sync mappers', () => {
     })
     expect(task.is_all_day).toBe(false)
     expect(task.start_date).toBeNull()
-    // Noon Minsk on Sep 21 = 09:00 UTC
-    expect(task.due_date).toBe('2026-09-21T09:00:00.000Z')
+    // Midnight Minsk on Sep 21 = 21:00 UTC Sep 20 (no clock / not noon)
+    expect(task.due_date).toBe('2026-09-20T21:00:00.000Z')
   })
 
   it('maps all-day with only dueDate as date-only (No time)', () => {
@@ -143,7 +143,7 @@ describe('sync mappers', () => {
     })
     expect(task.is_all_day).toBe(false)
     expect(task.start_date).toBeNull()
-    expect(task.due_date).toBe('2026-09-21T09:00:00.000Z')
+    expect(task.due_date).toBe('2026-09-20T21:00:00.000Z')
   })
 
   it('keeps multi-day TickTick all-day as an all-day event', () => {
@@ -161,14 +161,14 @@ describe('sync mappers', () => {
     expect(task.due_date).toBe('2026-09-23T09:00:00.000Z')
   })
 
-  it('pushes date-only without TickTick isAllDay; all-day events with isAllDay', () => {
+  it('pushes date-only as isAllDay without start; all-day events with start', () => {
     const dateOnly = localTaskToRemote({
       title: 'No time',
       content: '',
       projectRemoteId: 'p1',
       priority: 0,
       status: 'pending',
-      due_date: '2026-09-21T09:00:00.000Z',
+      due_date: '2026-09-20T21:00:00.000Z',
       start_date: null,
       is_all_day: false,
       time_zone: 'Europe/Minsk',
@@ -177,9 +177,10 @@ describe('sync mappers', () => {
       recurrence_rule: null,
       sort_order: 1,
     })
-    expect(dateOnly.isAllDay).toBe(false)
+    // TickTick needs isAllDay to hide the clock; no start ⇒ date-only, not a span event
+    expect(dateOnly.isAllDay).toBe(true)
     expect(dateOnly.startDate).toBeNull()
-    expect(dateOnly.dueDate).toBe('2026-09-21T09:00:00.000Z')
+    expect(dateOnly.dueDate).toBe('2026-09-20T21:00:00.000Z')
 
     const allDay = localTaskToRemote({
       title: 'All day',

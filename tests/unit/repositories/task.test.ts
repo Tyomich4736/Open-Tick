@@ -175,6 +175,39 @@ describe('TaskRepository', () => {
     expect(byDue.map((t) => t.title)).toEqual(['Alpha', 'Bravo'])
   })
 
+  it('sorts due_date with date-only before timed on the same day', () => {
+    const inbox = repos.projects.ensureInbox()
+    const day = new Date()
+    const midnight = new Date(day)
+    midnight.setHours(0, 0, 0, 0)
+    const morning = new Date(day)
+    morning.setHours(9, 0, 0, 0)
+    const afternoon = new Date(day)
+    afternoon.setHours(15, 0, 0, 0)
+
+    repos.tasks.create({
+      title: 'Afternoon',
+      project_id: inbox.id,
+      due_date: formatISO(afternoon),
+      is_all_day: false,
+    })
+    repos.tasks.create({
+      title: 'No time',
+      project_id: inbox.id,
+      due_date: formatISO(midnight),
+      is_all_day: false,
+    })
+    repos.tasks.create({
+      title: 'Morning',
+      project_id: inbox.id,
+      due_date: formatISO(morning),
+      is_all_day: false,
+    })
+
+    const byDue = repos.tasks.list({ project_id: inbox.id, sort: 'due_date' })
+    expect(byDue.map((t) => t.title)).toEqual(['No time', 'Morning', 'Afternoon'])
+  })
+
   it('hides completed when include_completed is false', () => {
     const work = repos.projects.create({ name: 'Work' })
     const open = repos.tasks.create({ title: 'Open', project_id: work.id })

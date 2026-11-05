@@ -1,7 +1,11 @@
 import type { Priority, ProjectViewMode } from '@shared/entities'
 import { preserveMarkdownBlankLines, toTickTickContent } from '@shared/markdownBlankLines'
 import type { RecurrenceRule, ReminderInput } from '@shared/recurrence'
-import { normalizeAllDayInstant, toUtcIso } from '@shared/taskDates'
+import {
+  normalizeAllDayInstant,
+  normalizeDateOnlyInstant,
+  toUtcIso,
+} from '@shared/taskDates'
 import type {
   RemoteColumn,
   RemoteProject,
@@ -254,8 +258,8 @@ export function remoteTaskToLocal(remote: RemoteTask): MappedTask {
  * TickTick often sets startDate === dueDate for a single timed point (no duration),
  * or only startDate. Store those as due-only so the UI does not show "15:00–15:00".
  *
- * All-day instants are rewritten to noon in the task timezone (canonical UTC Z)
- * so smart lists compare calendar days correctly.
+ * Date-only (isAllDay, no real range) → midnight in the task TZ (no clock).
+ * All-day events (start≠due) → noon anchors for stable calendar-day compares.
  */
 export function normalizeRemoteSchedule(
   dueDate: string | null | undefined,
@@ -268,11 +272,11 @@ export function normalizeRemoteSchedule(
 
   if (!start && !due) return { due_date: null, start_date: null }
   if (!start) {
-    due = isAllDay ? normalizeAllDayInstant(due, timeZone) : toUtcIso(due)
+    due = isAllDay ? normalizeDateOnlyInstant(due, timeZone) : toUtcIso(due)
     return { due_date: due, start_date: null }
   }
   if (!due) {
-    const only = isAllDay ? normalizeAllDayInstant(start, timeZone) : toUtcIso(start)
+    const only = isAllDay ? normalizeDateOnlyInstant(start, timeZone) : toUtcIso(start)
     return { due_date: only, start_date: null }
   }
 
@@ -283,7 +287,7 @@ export function normalizeRemoteSchedule(
       // TickTick often mirrors start into due for a point date / date-only.
       // Same-day all-day with start===due is treated as date-only ("No time"),
       // not a Duration all-day event (those keep distinct start/due days).
-      const point = isAllDay ? normalizeAllDayInstant(due, timeZone) : toUtcIso(due)
+      const point = isAllDay ? normalizeDateOnlyInstant(due, timeZone) : toUtcIso(due)
       return { due_date: point, start_date: null }
     }
   } catch {
@@ -392,9 +396,9 @@ export function localTaskToRemote(input: {
   recurrence_rule: RecurrenceRule | null
   sort_order: number
 }): Record<string, unknown> {
-  // Only Duration "All day" (is_all_day + start) maps to TickTick isAllDay.
-  // Date-only "No time" keeps a due date with isAllDay false so TickTick does not
-  // show it as an all-day event (clock is hidden locally via date-only formatting).
+  // TickTick only hides the clock with isAllDay. Date-only ("No time") = isAllDay
+  // + due only; Duration "All day" = isAllDay + start + due.
+  const isDateOnly = Boolean(input.due_date) && !input.start_date
   const isAllDayEvent = Boolean(input.is_all_day && input.start_date)
   const payload: Record<string, unknown> = {
     title: input.title,
@@ -402,7 +406,7 @@ export function localTaskToRemote(input: {
     content: toTickTickContent(input.content || ''),
     priority: input.priority,
     status: input.status === 'completed' ? 2 : 0,
-    isAllDay: isAllDayEvent,
+    isAllDay: isAllDayEvent || isDateOnly,
     sortOrder: input.sort_order,
     kind: 'TEXT',
   }

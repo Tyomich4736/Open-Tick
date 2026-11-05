@@ -193,8 +193,9 @@ export function toTimeInputValue(iso: string | null): string {
 
 /**
  * Build ISO from local date + optional time.
- * All-day and date-only ("No time", no timeStr) use noon local.
- * Explicit 12:00 is stored as 12:00:01 so it does not look like date-only.
+ * All-day events use noon local (stable calendar-day anchor).
+ * Date-only ("No time", no timeStr) uses midnight — no clock time.
+ * Explicit 00:00 / 12:00 use :01 so they are not treated as date-only.
  */
 export function combineLocalDateTime(
   dateStr: string,
@@ -202,10 +203,12 @@ export function combineLocalDateTime(
   allDay: boolean,
 ): string | null {
   if (!dateStr) return null
-  if (allDay || !timeStr) {
+  if (allDay) {
     return new Date(`${dateStr}T12:00:00`).toISOString()
   }
-  // Avoid colliding with date-only noon / midnight anchors
+  if (!timeStr) {
+    return new Date(`${dateStr}T00:00:00`).toISOString()
+  }
   if (timeStr === '12:00') {
     return new Date(`${dateStr}T12:00:01`).toISOString()
   }

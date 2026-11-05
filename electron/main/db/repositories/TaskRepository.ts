@@ -2,6 +2,7 @@ import { addDays, endOfDay, startOfDay } from 'date-fns'
 import { fromZonedTime, toZonedTime } from 'date-fns-tz'
 import type Database from 'better-sqlite3'
 import type { TaskFilter } from '@shared/filters'
+import { compareByDueDate } from '@shared/dueSchedule'
 import { instantToFilterIso } from '@shared/taskDates'
 import type {
   CreateTaskInput,
@@ -64,6 +65,7 @@ interface TaskListRow {
   due_date: string | null
   start_date: string | null
   is_all_day: number
+  sort_order: number
   project_id: string
   project_name: string
   project_color: string
@@ -959,7 +961,7 @@ export class TaskRepository {
       .prepare(
         `SELECT
           t.id, t.title, t.status, t.priority, t.due_date, t.start_date, t.is_all_day,
-          t.project_id, t.section_id, t.created_at, t.recurrence_rule,
+          t.sort_order, t.project_id, t.section_id, t.created_at, t.recurrence_rule,
           p.name as project_name, p.color as project_color, p.is_inbox as project_is_inbox,
           s.name as section_name, s.sort_order as section_sort,
           COALESCE(sc.subtask_count, 0) as subtask_count,
@@ -985,7 +987,7 @@ export class TaskRepository {
     const taskIds = rows.map((row) => row.id)
     const tagsByTask = this.tagRepository.getTagsForTasks(taskIds)
 
-    return rows.map((row) => ({
+    const items: TaskListItem[] = rows.map((row) => ({
       id: row.id,
       title: row.title,
       status: row.status,
@@ -1007,6 +1009,21 @@ export class TaskRepository {
       created_at: row.created_at,
       recurrence_rule: parseRecurrence(row.recurrence_rule),
     }))
+
+    if ((filter.sort ?? 'order') === 'due_date') {
+      const timezone = this.settingsRepository.getTimezone()
+      const sortOrderById = new Map(rows.map((row) => [row.id, row.sort_order]))
+      items.sort((a, b) =>
+        compareByDueDate(
+          { ...a, sort_order: sortOrderById.get(a.id) ?? 0 },
+          { ...b, sort_order: sortOrderById.get(b.id) ?? 0 },
+          new Date(),
+          timezone,
+        ),
+      )
+    }
+
+    return items
   }
 
   /** Count matching tasks without loading rows (sidebar badges, etc.). */

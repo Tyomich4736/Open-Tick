@@ -68,9 +68,9 @@ describe('isDurationSchedule / all-day vs date-only', () => {
   })
 
   it('labels date-only No time as a day without a clock', () => {
-    const noon = new Date(2026, 10, 2, 12, 0, 0).toISOString()
+    const midnight = new Date(2026, 10, 2, 0, 0, 0).toISOString()
     expect(
-      formatDueRange({ due_date: noon, start_date: null, is_all_day: false }, '24h'),
+      formatDueRange({ due_date: midnight, start_date: null, is_all_day: false }, '24h'),
     ).toBe('Mon')
   })
 

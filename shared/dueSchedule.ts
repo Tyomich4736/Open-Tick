@@ -1,10 +1,12 @@
 import {
   addDays,
+  compareAsc,
   differenceInCalendarDays,
   formatISO,
   parseISO,
   startOfDay,
 } from 'date-fns'
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 
 export type DueScheduleFields = {
   due_date: string | null
@@ -13,16 +15,14 @@ export type DueScheduleFields = {
 }
 
 /**
- * Date-only "No time" clock anchors when not all-day: local noon (picker) or
- * midnight (smart-list quick-add). Explicit 12:00 / 00:00 times use :01 seconds.
+ * Date-only "No time" storage: local midnight (no clock). Legacy rows may still
+ * use noon; treat both as date-only when minutes/seconds are zero.
  */
 export function isDateOnlyAnchor(iso: string): boolean {
   try {
     const d = parseISO(iso)
     const h = d.getHours()
-    return (
-      (h === 12 || h === 0) && d.getMinutes() === 0 && d.getSeconds() === 0
-    )
+    return (h === 0 || h === 12) && d.getMinutes() === 0 && d.getSeconds() === 0
   } catch {
     return false
   }
@@ -47,6 +47,69 @@ function noonOn(day: Date): Date {
   const next = new Date(day)
   next.setHours(12, 0, 0, 0)
   return next
+}
+
+function startOfCalendarDay(instant: Date, timeZone?: string): Date {
+  if (!timeZone) return startOfDay(instant)
+  const dateStr = formatInTimeZone(instant, timeZone, 'yyyy-MM-dd')
+  return fromZonedTime(`${dateStr}T00:00:00.000`, timeZone)
+}
+
+/**
+ * Instant used for due-date ordering.
+ * Date-only / all-day → start of that calendar day (before timed tasks).
+ * Timed point → due; timed duration → start.
+ */
+export function dueSortAnchor(
+  input: DueScheduleFields,
+  timeZone?: string,
+): Date | null {
+  if (!input.due_date) return null
+  const iso = input.start_date || input.due_date
+  try {
+    const instant = parseISO(iso!)
+    if (input.is_all_day || isDateOnlySchedule(input)) {
+      return startOfCalendarDay(instant, timeZone)
+    }
+    return instant
+  } catch {
+    return null
+  }
+}
+
+/**
+ * TickTick-like due ordering: dated before undated, overdue days first,
+ * then by day, date-only/all-day before timed that day, then clock time.
+ */
+export function compareByDueDate(
+  a: DueScheduleFields & { sort_order?: number },
+  b: DueScheduleFields & { sort_order?: number },
+  now = new Date(),
+  timeZone?: string,
+): number {
+  const aAnchor = dueSortAnchor(a, timeZone)
+  const bAnchor = dueSortAnchor(b, timeZone)
+  if (!aAnchor && !bAnchor) return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  if (!aAnchor) return 1
+  if (!bAnchor) return -1
+
+  const today = startOfCalendarDay(now, timeZone)
+  const aDay = startOfCalendarDay(aAnchor, timeZone)
+  const bDay = startOfCalendarDay(bAnchor, timeZone)
+  const aOverdue = aDay < today
+  const bOverdue = bDay < today
+  if (aOverdue !== bOverdue) return aOverdue ? -1 : 1
+
+  const byDay = compareAsc(aDay, bDay)
+  if (byDay !== 0) return byDay
+
+  const aAllDayLike = a.is_all_day || isDateOnlySchedule(a)
+  const bAllDayLike = b.is_all_day || isDateOnlySchedule(b)
+  if (aAllDayLike !== bAllDayLike) return aAllDayLike ? -1 : 1
+
+  const byTime = compareAsc(aAnchor, bAnchor)
+  if (byTime !== 0) return byTime
+  return (a.sort_order ?? 0) - (b.sort_order ?? 0)
 }
 
 /**
@@ -106,9 +169,9 @@ export function applyDueDaysFromNow(
     }
   }
 
-  // Fresh date or date-only "No time"
+  // Fresh date or date-only "No time" — midnight, no clock
   return {
-    due_date: formatISO(noonOn(targetDay)),
+    due_date: formatISO(targetDay),
     start_date: null,
     is_all_day: false,
   }

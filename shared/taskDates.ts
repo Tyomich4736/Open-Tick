@@ -14,6 +14,10 @@ export function toUtcIso(iso: string | null | undefined): string | null {
   return new Date(ms).toISOString()
 }
 
+function resolveZone(timeZone: string | null | undefined): string {
+  return timeZone && timeZone.trim() && timeZone !== 'system' ? timeZone.trim() : 'UTC'
+}
+
 /**
  * TickTick all-day due/start are midnight in the task timezone (often encoded
  * as the previous UTC evening, e.g. 2026-09-20T21:00:00.000+0000 = Sep 21 00:00
@@ -28,12 +32,30 @@ export function normalizeAllDayInstant(
   const ms = Date.parse(iso)
   if (!Number.isFinite(ms)) return null
 
-  const zone =
-    timeZone && timeZone.trim() && timeZone !== 'system' ? timeZone.trim() : 'UTC'
+  try {
+    const dateStr = formatInTimeZone(new Date(ms), resolveZone(timeZone), 'yyyy-MM-dd')
+    return fromZonedTime(`${dateStr}T12:00:00.000`, resolveZone(timeZone)).toISOString()
+  } catch {
+    return toUtcIso(iso)
+  }
+}
+
+/**
+ * Date-only ("No time") due: calendar day with no clock. Stored as local/task-TZ
+ * midnight — not noon — so it does not behave like a timed noon task.
+ */
+export function normalizeDateOnlyInstant(
+  iso: string | null | undefined,
+  timeZone: string | null | undefined,
+): string | null {
+  if (!iso) return null
+  const ms = Date.parse(iso)
+  if (!Number.isFinite(ms)) return null
 
   try {
+    const zone = resolveZone(timeZone)
     const dateStr = formatInTimeZone(new Date(ms), zone, 'yyyy-MM-dd')
-    return fromZonedTime(`${dateStr}T12:00:00.000`, zone).toISOString()
+    return fromZonedTime(`${dateStr}T00:00:00.000`, zone).toISOString()
   } catch {
     return toUtcIso(iso)
   }

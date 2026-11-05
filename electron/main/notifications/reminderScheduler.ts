@@ -1,5 +1,8 @@
 import { Notification } from 'electron'
+import { parseISO } from 'date-fns'
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import { DESKTOP_SETTING_KEYS, DESKTOP_DEFAULTS } from '@shared/desktopSettings'
+import { isDateOnlySchedule } from '@shared/dueSchedule'
 import type { ReminderKind } from '@shared/recurrence'
 import { getRepositories } from '../db/connection'
 import { getMainWindowRef, showMainWindow } from '../desktop/mainWindowRef'
@@ -23,9 +26,30 @@ interface DueReminderRow {
   due_date: string
   /** Start of timed duration; null for point-in-time / all-day-only due. */
   start_date: string | null
+  is_all_day: number
   kind: ReminderKind
   offset_minutes: number
   last_notified_at: string | null
+}
+
+/** 09:00 on the calendar day of `dayIso` in `timeZone` (or local wall clock). */
+export function nineAmOnCalendarDay(
+  dayIso: string,
+  timeZone?: string | null,
+): string | null {
+  try {
+    const zone =
+      timeZone && timeZone.trim() && timeZone !== 'system' ? timeZone.trim() : null
+    if (zone) {
+      const dateStr = formatInTimeZone(parseISO(dayIso), zone, 'yyyy-MM-dd')
+      return fromZonedTime(`${dateStr}T09:00:00.000`, zone).toISOString()
+    }
+    const d = parseISO(dayIso)
+    d.setHours(9, 0, 0, 0)
+    return d.toISOString()
+  } catch {
+    return null
+  }
 }
 
 function notificationsEnabled(): boolean {
@@ -35,14 +59,34 @@ function notificationsEnabled(): boolean {
   return value ?? DESKTOP_DEFAULTS.notificationsEnabled
 }
 
+export type ReminderAnchorOptions = {
+  is_all_day?: boolean
+  timeZone?: string | null
+}
+
 /**
  * Instant reminders are relative to: duration start when set, else due.
  * (13:00–13:30 + 5 min before → 12:55, not 13:25.)
+ * Date-only / all-day (no clock) use 09:00 on that calendar day.
  */
 export function reminderAnchorIso(
   startDate: string | null | undefined,
   dueDate: string | null | undefined,
+  options?: ReminderAnchorOptions,
 ): string | null {
+  if (!dueDate && !startDate) return null
+
+  const fields = {
+    due_date: dueDate ?? null,
+    start_date: startDate ?? null,
+    is_all_day: options?.is_all_day ?? false,
+  }
+  const noClock = fields.is_all_day || isDateOnlySchedule(fields)
+  if (noClock) {
+    const dayIso = startDate || dueDate
+    return dayIso ? nineAmOnCalendarDay(dayIso, options?.timeZone) : null
+  }
+
   return startDate || dueDate || null
 }
 
@@ -95,6 +139,7 @@ function pollReminders(): void {
 
   const repos = getRepositories()
   const now = Date.now()
+  const timeZone = repos.settings.getTimezone()
 
   const rows = repos.db
     .prepare(
@@ -104,6 +149,7 @@ function pollReminders(): void {
          t.title,
          t.due_date,
          t.start_date,
+         t.is_all_day,
          r.kind,
          r.offset_minutes,
          r.last_notified_at
@@ -121,7 +167,10 @@ function pollReminders(): void {
   )
 
   for (const row of rows) {
-    const anchor = reminderAnchorIso(row.start_date, row.due_date)
+    const anchor = reminderAnchorIso(row.start_date, row.due_date, {
+      is_all_day: Boolean(row.is_all_day),
+      timeZone,
+    })
     if (!anchor) continue
     const fireAt = reminderFireAtMs(anchor, row.kind, row.offset_minutes)
     if (!Number.isFinite(fireAt) || fireAt > now) continue

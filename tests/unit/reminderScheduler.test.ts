@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  nineAmOnCalendarDay,
   reminderAnchorIso,
   reminderFireAtMs,
   shouldShowReminder,
@@ -13,10 +14,39 @@ describe('reminderAnchorIso', () => {
     ).toBe('2026-10-21T13:00:00.000Z')
   })
 
-  it('falls back to due when start is missing', () => {
+  it('falls back to due when start is missing for timed tasks', () => {
     expect(reminderAnchorIso(null, '2026-10-21T13:30:00.000Z')).toBe(
       '2026-10-21T13:30:00.000Z',
     )
+  })
+
+  it('uses 09:00 on the due day for date-only (No time) tasks', () => {
+    // Local midnight date-only
+    const due = new Date(2026, 9, 21, 0, 0, 0).toISOString()
+    const anchor = reminderAnchorIso(null, due, { is_all_day: false })
+    expect(anchor).toBe(nineAmOnCalendarDay(due))
+    const d = new Date(anchor!)
+    expect(d.getHours()).toBe(9)
+    expect(d.getMinutes()).toBe(0)
+    expect(d.getDate()).toBe(21)
+  })
+
+  it('uses 09:00 on the start day for all-day events', () => {
+    const start = new Date(2026, 9, 21, 12, 0, 0).toISOString()
+    const due = new Date(2026, 9, 22, 12, 0, 0).toISOString()
+    const anchor = reminderAnchorIso(start, due, { is_all_day: true })
+    expect(anchor).toBe(nineAmOnCalendarDay(start))
+  })
+
+  it('uses 09:00 in the task timezone when provided', () => {
+    // Sep 21 00:00 Europe/Minsk = 2026-09-20T21:00:00.000Z
+    const due = '2026-09-20T21:00:00.000Z'
+    const anchor = reminderAnchorIso(null, due, {
+      is_all_day: false,
+      timeZone: 'Europe/Minsk',
+    })
+    // 09:00 Minsk on Sep 21 = 06:00 UTC
+    expect(anchor).toBe('2026-09-21T06:00:00.000Z')
   })
 })
 

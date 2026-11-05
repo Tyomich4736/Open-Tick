@@ -28,16 +28,10 @@ function defaultDueDate(view: ViewType): string | null {
   if (view.kind !== 'smart') return null
   const now = new Date()
   switch (view.smart_list) {
-    case 'today': {
-      const day = startOfDay(now)
-      day.setHours(12, 0, 0, 0)
-      return formatISO(day)
-    }
-    case 'tomorrow': {
-      const day = startOfDay(addDays(now, 1))
-      day.setHours(12, 0, 0, 0)
-      return formatISO(day)
-    }
+    case 'today':
+      return formatISO(startOfDay(now))
+    case 'tomorrow':
+      return formatISO(startOfDay(addDays(now, 1)))
     default:
       return null
   }

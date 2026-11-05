@@ -55,7 +55,7 @@ describe('applyDueDaysFromNow', () => {
 
     const result = applyDueDaysFromNow(
       {
-        due_date: new Date(2026, 9, 10, 12, 0, 0).toISOString(),
+        due_date: new Date(2026, 9, 10, 0, 0, 0).toISOString(),
         start_date: null,
         is_all_day: false,
       },
@@ -66,7 +66,8 @@ describe('applyDueDaysFromNow', () => {
     expect(result.start_date).toBeNull()
     const due = new Date(result.due_date!)
     expect(due.getDate()).toBe(15)
-    expect(due.getHours()).toBe(12)
+    expect(due.getHours()).toBe(0)
+    expect(due.getMinutes()).toBe(0)
   })
 
   it('keeps all-day events all-day when shifting the span', () => {
