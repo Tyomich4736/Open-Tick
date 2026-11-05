@@ -81,7 +81,8 @@ export function reminderAnchorIso(
     start_date: startDate ?? null,
     is_all_day: options?.is_all_day ?? false,
   }
-  const noClock = fields.is_all_day || isDateOnlySchedule(fields)
+  const noClock =
+    fields.is_all_day || isDateOnlySchedule(fields, options?.timeZone)
   if (noClock) {
     const dayIso = startDate || dueDate
     return dayIso ? nineAmOnCalendarDay(dayIso, options?.timeZone) : null
