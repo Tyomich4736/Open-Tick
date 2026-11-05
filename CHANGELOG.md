@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.2] - 2026-11-05
+
+### Added
+
+- Push pending TickTick changes with Ctrl+S
+
+### Fixed
+
+- Due-date sorting and reminders for tasks with a date but no time
+- Tasks with no time were incorrectly treated as all-day when syncing to TickTick
+- All-day checkbox behavior
+- Reminders firing before a task’s end time
+- Date/time preview formatting
+
 ## [1.2.1] - 2026-10-31
 
 ### Fixed
