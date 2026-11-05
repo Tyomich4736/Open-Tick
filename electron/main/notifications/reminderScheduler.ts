@@ -19,7 +19,10 @@ interface DueReminderRow {
   reminder_id: string
   task_id: string
   title: string
+  /** End of range (or point-in-time when start is null). */
   due_date: string
+  /** Start of timed duration; null for point-in-time / all-day-only due. */
+  start_date: string | null
   kind: ReminderKind
   offset_minutes: number
   last_notified_at: string | null
@@ -32,17 +35,28 @@ function notificationsEnabled(): boolean {
   return value ?? DESKTOP_DEFAULTS.notificationsEnabled
 }
 
-/** When the reminder should fire, based on due instant + kind/offset. */
+/**
+ * Instant reminders are relative to: duration start when set, else due.
+ * (13:00–13:30 + 5 min before → 12:55, not 13:25.)
+ */
+export function reminderAnchorIso(
+  startDate: string | null | undefined,
+  dueDate: string | null | undefined,
+): string | null {
+  return startDate || dueDate || null
+}
+
+/** When the reminder should fire, based on anchor instant + kind/offset. */
 export function reminderFireAtMs(
-  dueDate: string,
+  anchorIso: string,
   kind: ReminderKind,
   offsetMinutes: number,
 ): number {
-  const due = new Date(dueDate).getTime()
-  if (!Number.isFinite(due)) return Number.NaN
-  if (kind === 'after') return due + offsetMinutes * 60_000
+  const anchor = new Date(anchorIso).getTime()
+  if (!Number.isFinite(anchor)) return Number.NaN
+  if (kind === 'after') return anchor + offsetMinutes * 60_000
   // before + at_due (offset 0)
-  return due - offsetMinutes * 60_000
+  return anchor - offsetMinutes * 60_000
 }
 
 /** True only when fire time is due and still "now" (within grace). */
@@ -55,24 +69,25 @@ export function shouldShowReminder(
   return now - fireAt <= graceMs
 }
 
-function notificationBody(row: DueReminderRow, now: number, fireAt: number): string {
+function notificationBody(anchorMs: number, row: DueReminderRow, now: number, fireAt: number): string {
+  const when = new Date(anchorMs).toLocaleString()
   if (row.kind === 'at_due' || row.offset_minutes === 0) {
-    return now >= new Date(row.due_date).getTime() ? 'Due now' : 'Due soon'
+    return now >= anchorMs ? 'Due now' : 'Due soon'
   }
   if (row.kind === 'after') {
-    return `Due ${new Date(row.due_date).toLocaleString()}`
+    return `Due ${when}`
   }
-  // before — if already past due, don't claim "Due in X"
-  if (now >= new Date(row.due_date).getTime()) {
-    return `Was due ${new Date(row.due_date).toLocaleString()}`
+  // before — if already past the anchor, don't claim "Due in X"
+  if (now >= anchorMs) {
+    return `Was due ${when}`
   }
   if (fireAt <= now && row.offset_minutes < 60) {
-    const minsLeft = Math.max(0, Math.round((new Date(row.due_date).getTime() - now) / 60_000))
+    const minsLeft = Math.max(0, Math.round((anchorMs - now) / 60_000))
     return minsLeft <= 0 ? 'Due now' : `Due in ${minsLeft} min`
   }
   if (row.offset_minutes < 60) return `Due in ${row.offset_minutes} min`
   if (row.offset_minutes < 1440) return `Due in ${Math.round(row.offset_minutes / 60)} h`
-  return `Reminder · due ${new Date(row.due_date).toLocaleString()}`
+  return `Reminder · due ${when}`
 }
 
 function pollReminders(): void {
@@ -88,6 +103,7 @@ function pollReminders(): void {
          r.task_id,
          t.title,
          t.due_date,
+         t.start_date,
          r.kind,
          r.offset_minutes,
          r.last_notified_at
@@ -95,7 +111,7 @@ function pollReminders(): void {
        INNER JOIN tasks t ON t.id = r.task_id
        WHERE t.deleted_at IS NULL
          AND t.status = 'pending'
-         AND t.due_date IS NOT NULL
+         AND COALESCE(t.start_date, t.due_date) IS NOT NULL
          AND r.last_notified_at IS NULL`,
     )
     .all() as DueReminderRow[]
@@ -105,7 +121,9 @@ function pollReminders(): void {
   )
 
   for (const row of rows) {
-    const fireAt = reminderFireAtMs(row.due_date, row.kind, row.offset_minutes)
+    const anchor = reminderAnchorIso(row.start_date, row.due_date)
+    if (!anchor) continue
+    const fireAt = reminderFireAtMs(anchor, row.kind, row.offset_minutes)
     if (!Number.isFinite(fireAt) || fireAt > now) continue
 
     // Missed while closed / stale — silence without notifying
@@ -119,9 +137,10 @@ function pollReminders(): void {
       continue
     }
 
+    const anchorMs = new Date(anchor).getTime()
     const notification = new Notification({
       title: row.title || 'Task reminder',
-      body: notificationBody(row, now, fireAt),
+      body: notificationBody(anchorMs, row, now, fireAt),
       silent: false,
     })
 
