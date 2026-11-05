@@ -59,12 +59,19 @@ describe('isDurationSchedule / all-day vs date-only', () => {
   })
 
   it('treats same-day all-day with start as duration (All day)', () => {
-    const noon = '2026-11-02T12:00:00.000Z'
+    const noon = new Date(2026, 10, 2, 12, 0, 0).toISOString()
     expect(isDurationSchedule(noon, noon, true)).toBe(true)
   })
 
   it('treats date-only (no start) as not duration (No time)', () => {
-    expect(isDurationSchedule(null, '2026-11-02T12:00:00.000Z', true)).toBe(false)
+    expect(isDurationSchedule(null, '2026-11-02T12:00:00.000Z', false)).toBe(false)
+  })
+
+  it('labels date-only No time as a day without a clock', () => {
+    const noon = new Date(2026, 10, 2, 12, 0, 0).toISOString()
+    expect(
+      formatDueRange({ due_date: noon, start_date: null, is_all_day: false }, '24h'),
+    ).toBe('Mon')
   })
 
   it('labels same-day all-day as a day without a clock', () => {

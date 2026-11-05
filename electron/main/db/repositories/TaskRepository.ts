@@ -173,7 +173,7 @@ export class TaskRepository {
       status: 'pending',
       due_date: input.due_date ?? null,
       start_date: input.start_date ?? null,
-      is_all_day: input.is_all_day ?? true,
+      is_all_day: input.is_all_day ?? false,
       time_zone: input.time_zone ?? null,
       recurrence_rule: input.recurrence_rule ?? null,
       recurrence_parent_id: null,

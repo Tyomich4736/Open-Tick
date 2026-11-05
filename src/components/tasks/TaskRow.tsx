@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { TaskListItem } from '@shared/entities'
 import type { TimeFormat } from '@/hooks/useTimeFormat'
-import { formatDueRange, isOverdue } from '@/lib/formatDueDate'
+import { formatDueRange, isDateOnlySchedule, isOverdue } from '@/lib/formatDueDate'
 import { priorityTextColor } from '@/lib/priority'
 import { useTaskSelectionStore } from '@/stores/taskSelectionStore'
 
@@ -55,7 +55,17 @@ export const TaskRow = memo(function TaskRow({
     },
     timeFormat,
   )
-  const overdue = task.status === 'pending' && isOverdue(task.due_date, task.is_all_day)
+  const overdue =
+    task.status === 'pending' &&
+    isOverdue(
+      task.due_date,
+      task.is_all_day,
+      isDateOnlySchedule({
+        due_date: task.due_date,
+        start_date: task.start_date,
+        is_all_day: task.is_all_day,
+      }),
+    )
   const completed = task.status === 'completed'
   const hasSubtasks = task.subtask_count > 0
   const compact = density === 'compact'

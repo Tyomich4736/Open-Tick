@@ -28,10 +28,16 @@ function defaultDueDate(view: ViewType): string | null {
   if (view.kind !== 'smart') return null
   const now = new Date()
   switch (view.smart_list) {
-    case 'today':
-      return formatISO(startOfDay(now))
-    case 'tomorrow':
-      return formatISO(startOfDay(addDays(now, 1)))
+    case 'today': {
+      const day = startOfDay(now)
+      day.setHours(12, 0, 0, 0)
+      return formatISO(day)
+    }
+    case 'tomorrow': {
+      const day = startOfDay(addDays(now, 1))
+      day.setHours(12, 0, 0, 0)
+      return formatISO(day)
+    }
     default:
       return null
   }
@@ -188,7 +194,7 @@ export function TaskViewPage({ view }: TaskViewPageProps) {
               project_id: defaultProjectId,
               section_id: isProjectView ? quickAddSectionId : undefined,
               due_date: defaultDueDate(view),
-              is_all_day: true,
+              is_all_day: false,
               tags: view.kind === 'tag' ? [view.tagName] : undefined,
             })
             setQuickAddSectionId(null)

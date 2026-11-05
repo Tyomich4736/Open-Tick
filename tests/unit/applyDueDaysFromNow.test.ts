@@ -49,21 +49,42 @@ describe('applyDueDaysFromNow', () => {
     expect(due.getHours()).toBe(17)
   })
 
-  it('keeps all-day tasks all-day on the target day', () => {
+  it('moves date-only (No time) without turning it into an all-day event', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 9, 14, 12, 0, 0))
 
     const result = applyDueDaysFromNow(
       {
         due_date: new Date(2026, 9, 10, 12, 0, 0).toISOString(),
+        start_date: null,
+        is_all_day: false,
+      },
+      1,
+    )
+
+    expect(result.is_all_day).toBe(false)
+    expect(result.start_date).toBeNull()
+    const due = new Date(result.due_date!)
+    expect(due.getDate()).toBe(15)
+    expect(due.getHours()).toBe(12)
+  })
+
+  it('keeps all-day events all-day when shifting the span', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 9, 14, 12, 0, 0))
+
+    const result = applyDueDaysFromNow(
+      {
+        due_date: new Date(2026, 9, 11, 12, 0, 0).toISOString(),
+        start_date: new Date(2026, 9, 10, 12, 0, 0).toISOString(),
         is_all_day: true,
       },
       1,
     )
 
     expect(result.is_all_day).toBe(true)
-    const due = new Date(result.due_date!)
-    expect(due.getDate()).toBe(15)
+    expect(new Date(result.due_date!).getDate()).toBe(15)
+    expect(new Date(result.start_date!).getDate()).toBe(14)
   })
 
   it('clears due and start', () => {

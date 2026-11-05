@@ -12,6 +12,7 @@ import {
   snapMinutes,
   tasksForDay,
 } from '@/lib/calendarUtils'
+import { isDateOnlySchedule } from '@/lib/formatDueDate'
 import { useTimeFormat } from '@/hooks/useTimeFormat'
 import { useCalendarVisibleHours } from '@/hooks/useCalendarVisibleHours'
 import { useCalendarStore } from '@/stores/calendarStore'
@@ -84,13 +85,33 @@ export function CalendarTimeGrid({
   }
 
   const allDayByDay = useMemo(
-    () => days.map((day) => tasksForDay(tasks, day).filter((t) => t.is_all_day)),
+    () =>
+      days.map((day) =>
+        tasksForDay(tasks, day).filter(
+          (t) =>
+            t.is_all_day ||
+            isDateOnlySchedule({
+              due_date: t.due_date,
+              start_date: t.start_date,
+              is_all_day: t.is_all_day,
+            }),
+        ),
+      ),
     [days, tasks],
   )
 
   const laidOutByDay = useMemo(() => {
     return days.map((day) => {
-      const timed = tasksForDay(tasks, day).filter((t) => !t.is_all_day && t.due_date)
+      const timed = tasksForDay(tasks, day).filter(
+        (t) =>
+          !t.is_all_day &&
+          t.due_date &&
+          !isDateOnlySchedule({
+            due_date: t.due_date,
+            start_date: t.start_date,
+            is_all_day: t.is_all_day,
+          }),
+      )
       const items = timed.flatMap((task) => {
         const start = effectiveStart(task)
         const end = effectiveEnd(task)

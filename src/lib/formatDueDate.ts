@@ -9,7 +9,19 @@ import {
 } from 'date-fns'
 import type { TimeFormat } from '@/hooks/useTimeFormat'
 
-export { applyDueDaysFromNow, type DueScheduleFields } from '@shared/dueSchedule'
+import {
+  applyDueDaysFromNow,
+  isAllDayEvent,
+  isDateOnlySchedule,
+  type DueScheduleFields,
+} from '@shared/dueSchedule'
+
+export {
+  applyDueDaysFromNow,
+  isAllDayEvent,
+  isDateOnlySchedule,
+  type DueScheduleFields,
+}
 
 function timePattern(timeFormat: TimeFormat): string {
   return timeFormat === '24h' ? 'HH:mm' : 'h:mm a'
@@ -33,15 +45,17 @@ export function formatDueDate(
   dueDate: string | null,
   isAllDay: boolean,
   timeFormat: TimeFormat = '12h',
+  dateOnly = false,
 ): string | null {
   if (!dueDate) return null
 
   try {
     const date = parseISO(dueDate)
-    // All-day chips use the local calendar day (not the raw instant clock).
-    const day = isAllDay ? startOfDay(date) : date
+    // All-day / date-only chips use the local calendar day (not the raw instant clock).
+    const dayOnly = isAllDay || dateOnly
+    const day = dayOnly ? startOfDay(date) : date
     const dayLabel = formatDayPart(day)
-    if (isAllDay) return dayLabel
+    if (dayOnly) return dayLabel
     return `${dayLabel}, ${format(date, timePattern(timeFormat))}`
   } catch {
     return null
@@ -91,7 +105,12 @@ export function formatDueRange(
   if (!input.due_date) return null
   const start = input.start_date
   if (!start || !isDurationSchedule(start, input.due_date, input.is_all_day)) {
-    return formatDueDate(input.due_date, input.is_all_day, timeFormat)
+    return formatDueDate(
+      input.due_date,
+      input.is_all_day,
+      timeFormat,
+      isDateOnlySchedule(input),
+    )
   }
 
   try {
@@ -135,12 +154,16 @@ export function formatScheduleLabel(
   return formatDueRange(input, timeFormat) ?? 'Set date'
 }
 
-export function isOverdue(dueDate: string | null, isAllDay = false): boolean {
+export function isOverdue(
+  dueDate: string | null,
+  isAllDay = false,
+  dateOnly = false,
+): boolean {
   if (!dueDate) return false
   try {
     const date = parseISO(dueDate)
-    if (isAllDay) {
-      // All-day is overdue only after its local calendar day has ended.
+    if (isAllDay || dateOnly) {
+      // Date-only / all-day: overdue only after the local calendar day has ended.
       return startOfDay(date) < startOfDay(new Date())
     }
     return date < new Date() && !isToday(date)
@@ -168,7 +191,11 @@ export function toTimeInputValue(iso: string | null): string {
   }
 }
 
-/** Build ISO from local date + optional time. All-day uses noon local. */
+/**
+ * Build ISO from local date + optional time.
+ * All-day and date-only ("No time", no timeStr) use noon local.
+ * Explicit 12:00 is stored as 12:00:01 so it does not look like date-only.
+ */
 export function combineLocalDateTime(
   dateStr: string,
   timeStr: string | null,
@@ -177,6 +204,13 @@ export function combineLocalDateTime(
   if (!dateStr) return null
   if (allDay || !timeStr) {
     return new Date(`${dateStr}T12:00:00`).toISOString()
+  }
+  // Avoid colliding with date-only noon / midnight anchors
+  if (timeStr === '12:00') {
+    return new Date(`${dateStr}T12:00:01`).toISOString()
+  }
+  if (timeStr === '00:00') {
+    return new Date(`${dateStr}T00:00:01`).toISOString()
   }
   return new Date(`${dateStr}T${timeStr}:00`).toISOString()
 }

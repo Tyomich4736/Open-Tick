@@ -217,13 +217,16 @@ export function remoteColumnToLocal(remote: RemoteColumn): MappedSection {
 }
 
 export function remoteTaskToLocal(remote: RemoteTask): MappedTask {
-  const isAllDay = Boolean(remote.isAllDay)
+  const remoteAllDay = Boolean(remote.isAllDay)
   const { due_date, start_date } = normalizeRemoteSchedule(
     remote.dueDate,
     remote.startDate,
-    isAllDay,
+    remoteAllDay,
     remote.timeZone,
   )
+  // TickTick uses isAllDay for both date-only and all-day events.
+  // Locally, all-day means a Duration event (start kept); date-only is "No time".
+  const is_all_day = remoteAllDay && Boolean(start_date)
 
   return {
     remote_id: remote.id,
@@ -236,7 +239,7 @@ export function remoteTaskToLocal(remote: RemoteTask): MappedTask {
     status: remoteTaskIsCompleted(remote) ? 'completed' : 'pending',
     due_date,
     start_date,
-    is_all_day: isAllDay,
+    is_all_day,
     time_zone: remote.timeZone ?? null,
     tags: Array.isArray(remote.tags) ? remote.tags.filter(Boolean) : [],
     reminders: mapRemoteReminders(remote.reminders),
@@ -277,13 +280,11 @@ export function normalizeRemoteSchedule(
     const startMs = Date.parse(start)
     const dueMs = Date.parse(due)
     if (Number.isFinite(startMs) && Number.isFinite(dueMs) && Math.abs(startMs - dueMs) < 60_000) {
-      // Timed point: TickTick often mirrors start into due — store due-only.
-      // All-day with start+due (even same day) is an all-day event, not date-only.
-      if (isAllDay) {
-        const point = normalizeAllDayInstant(due, timeZone)
-        return { due_date: point, start_date: point }
-      }
-      return { due_date: toUtcIso(due), start_date: null }
+      // TickTick often mirrors start into due for a point date / date-only.
+      // Same-day all-day with start===due is treated as date-only ("No time"),
+      // not a Duration all-day event (those keep distinct start/due days).
+      const point = isAllDay ? normalizeAllDayInstant(due, timeZone) : toUtcIso(due)
+      return { due_date: point, start_date: null }
     }
   } catch {
     /* fall through */
@@ -391,13 +392,17 @@ export function localTaskToRemote(input: {
   recurrence_rule: RecurrenceRule | null
   sort_order: number
 }): Record<string, unknown> {
+  // Only Duration "All day" (is_all_day + start) maps to TickTick isAllDay.
+  // Date-only "No time" keeps a due date with isAllDay false so TickTick does not
+  // show it as an all-day event (clock is hidden locally via date-only formatting).
+  const isAllDayEvent = Boolean(input.is_all_day && input.start_date)
   const payload: Record<string, unknown> = {
     title: input.title,
     projectId: input.projectRemoteId,
     content: toTickTickContent(input.content || ''),
     priority: input.priority,
     status: input.status === 'completed' ? 2 : 0,
-    isAllDay: input.is_all_day,
+    isAllDay: isAllDayEvent,
     sortOrder: input.sort_order,
     kind: 'TEXT',
   }
@@ -405,7 +410,8 @@ export function localTaskToRemote(input: {
   // Always send columnId (including null) so clearing a section syncs to TickTick
   payload.columnId = input.columnRemoteId ?? null
   if (input.due_date) payload.dueDate = input.due_date
-  if (input.start_date) payload.startDate = input.start_date
+  // Always send startDate (including null) so clearing start syncs for "No time"
+  payload.startDate = input.start_date ?? null
   if (input.time_zone) payload.timeZone = input.time_zone
   if (input.tags.length) payload.tags = input.tags
   // Always send reminders (including []) so clearing them syncs to TickTick

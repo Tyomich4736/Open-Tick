@@ -10,6 +10,7 @@ import { useTimeFormat } from '@/hooks/useTimeFormat'
 import {
   combineLocalDateTime,
   formatScheduleLabel,
+  isDateOnlySchedule,
   isDurationSchedule,
   presetDueIso,
   toDateInputValue,
@@ -55,6 +56,9 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
     ? 'duration'
     : 'time'
 
+  const dateOnly = isDateOnlySchedule(value)
+  const hideTimeControls = mode === 'duration' ? value.is_all_day : dateOnly
+
   const rangeError = useMemo(() => {
     if (!value.start_date || !value.due_date || value.is_all_day) return null
     try {
@@ -94,36 +98,51 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
   const setMode = (next: PickerMode) => {
     if (next === 'time') {
       // Duration → Time: drop start. All-day event becomes date-only ("No time").
+      const dateStr = toDateInputValue(value.due_date) || todayStr
+      if (value.is_all_day) {
+        onChange({
+          ...value,
+          is_all_day: false,
+          start_date: null,
+          due_date: combineLocalDateTime(dateStr, null, false),
+        })
+        return
+      }
       onChange({ ...value, start_date: null })
       return
     }
     const dateStr = toDateInputValue(value.due_date) || todayStr
-    const endTime = value.is_all_day ? null : toTimeInputValue(value.due_date) || '10:00'
-    let startTime: string | null = null
-    if (!value.is_all_day) {
-      const [h, m] = (endTime || '10:00').split(':').map(Number)
-      const startH = h === 0 && m === 0 ? 0 : Math.max(0, h - 1)
-      startTime = `${String(startH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    if (dateOnly || value.is_all_day) {
+      // Date-only → same-day all-day event
+      onChange({
+        ...value,
+        is_all_day: true,
+        start_date: combineLocalDateTime(dateStr, null, true),
+        due_date: combineLocalDateTime(dateStr, null, true),
+      })
+      return
     }
-    const nextValue: ScheduleValue = {
+    const endTime = toTimeInputValue(value.due_date) || '10:00'
+    const [h, m] = endTime.split(':').map(Number)
+    const startH = h === 0 && m === 0 ? 0 : Math.max(0, h - 1)
+    const startTime = `${String(startH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    onChange({
       ...value,
-      // Date-only → all-day event keeps is_all_day and gains start (= due day)
-      start_date: combineLocalDateTime(dateStr, startTime, value.is_all_day),
-      due_date: combineLocalDateTime(dateStr, endTime, value.is_all_day),
-    }
-    if (!value.is_all_day) {
-      nextValue.reminders = ensureAtDueReminder(value.reminders)
-    }
-    onChange(nextValue)
+      is_all_day: false,
+      start_date: combineLocalDateTime(dateStr, startTime, false),
+      due_date: combineLocalDateTime(dateStr, endTime, false),
+      reminders: ensureAtDueReminder(value.reminders),
+    })
   }
 
   const setPointDate = (dateStr: string) => {
-    const time = value.is_all_day ? null : toTimeInputValue(value.due_date) || '09:00'
+    const time = dateOnly ? null : toTimeInputValue(value.due_date) || '09:00'
     onChange({
       ...value,
+      is_all_day: false,
       start_date: null,
-      due_date: combineLocalDateTime(dateStr, time, value.is_all_day),
-      reminders: value.is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
+      due_date: combineLocalDateTime(dateStr, time, false),
+      reminders: dateOnly ? value.reminders : ensureAtDueReminder(value.reminders),
     })
   }
 
@@ -197,62 +216,46 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
     })
   }
 
-  /**
-   * Duration "All day" → TickTick all-day event (start + due kept).
-   * Time "No time" → date-only deadline (due only, no start, no clock).
-   */
-  const setDateOnlyOrAllDay = (enabled: boolean) => {
+  /** Duration "All day" — TickTick all-day event (is_all_day + start + due). */
+  const setAllDay = (enabled: boolean) => {
     const leaving = value.is_all_day && !enabled
-    if (mode === 'duration') {
-      onChange({
-        ...value,
-        is_all_day: enabled,
-        start_date: combineLocalDateTime(
-          allDayStartStr || durationDateStr,
-          enabled
-            ? null
-            : leaving
-              ? '09:00'
-              : toTimeInputValue(value.start_date) || '09:00',
-          enabled,
-        ),
-        due_date: combineLocalDateTime(
-          allDayEndStr || durationDateStr,
-          enabled
-            ? null
-            : leaving
-              ? '10:00'
-              : toTimeInputValue(value.due_date) || '10:00',
-          enabled,
-        ),
-        reminders: enabled ? value.reminders : ensureAtDueReminder(value.reminders),
-      })
-      return
-    }
-    // No time: date only — never keep start_date
-    const dueDate = toDateInputValue(value.due_date) || (enabled ? todayStr : '')
     onChange({
       ...value,
       is_all_day: enabled,
+      start_date: combineLocalDateTime(
+        allDayStartStr || durationDateStr,
+        enabled ? null : leaving ? '09:00' : toTimeInputValue(value.start_date) || '09:00',
+        enabled,
+      ),
+      due_date: combineLocalDateTime(
+        allDayEndStr || durationDateStr,
+        enabled ? null : leaving ? '10:00' : toTimeInputValue(value.due_date) || '10:00',
+        enabled,
+      ),
+      reminders: enabled ? value.reminders : ensureAtDueReminder(value.reminders),
+    })
+  }
+
+  /** Time "No time" — date only, not TickTick all-day (is_all_day false, noon anchor). */
+  const setNoTime = (enabled: boolean) => {
+    const dueDate = toDateInputValue(value.due_date) || (enabled ? todayStr : '')
+    onChange({
+      ...value,
+      is_all_day: false,
+      start_date: null,
       due_date: dueDate
         ? combineLocalDateTime(
             dueDate,
-            enabled
-              ? null
-              : leaving
-                ? '09:00'
-                : toTimeInputValue(value.due_date) || '09:00',
-            enabled,
+            enabled ? null : dateOnly ? '09:00' : toTimeInputValue(value.due_date) || '09:00',
+            false,
           )
         : value.due_date,
-      start_date: null,
       reminders: enabled ? value.reminders : ensureAtDueReminder(value.reminders),
     })
   }
 
   const applyPreset = (preset: 'today' | 'tomorrow' | 'next_week') => {
-    const due = presetDueIso(preset, value.is_all_day)
-    const dateStr = toDateInputValue(due)
+    const dateStr = toDateInputValue(presetDueIso(preset, true))
     if (mode === 'duration') {
       if (value.is_all_day) {
         onChange({
@@ -271,10 +274,17 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
       })
       return
     }
+    // Time tab presets: keep date-only vs timed
     onChange({
       ...value,
-      due_date: due,
+      is_all_day: false,
       start_date: null,
+      due_date: combineLocalDateTime(
+        dateStr,
+        dateOnly ? null : toTimeInputValue(value.due_date) || '09:00',
+        false,
+      ),
+      reminders: dateOnly ? value.reminders : ensureAtDueReminder(value.reminders),
     })
   }
 
@@ -414,7 +424,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
           />
         )}
 
-        {!value.is_all_day &&
+        {!hideTimeControls &&
           (mode === 'duration' ? (
             <div className="mt-2 grid grid-cols-2 gap-2">
               <label className="block min-w-0">
@@ -452,8 +462,10 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
           <label className="flex shrink-0 items-center gap-1.5 text-xs text-text-muted">
             <input
               type="checkbox"
-              checked={value.is_all_day}
-              onChange={(e) => setDateOnlyOrAllDay(e.target.checked)}
+              checked={mode === 'duration' ? value.is_all_day : dateOnly}
+              onChange={(e) =>
+                mode === 'duration' ? setAllDay(e.target.checked) : setNoTime(e.target.checked)
+              }
               className="rounded border-border"
             />
             {mode === 'duration' ? 'All day' : 'No time'}
