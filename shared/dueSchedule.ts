@@ -15,14 +15,21 @@ export type DueScheduleFields = {
 }
 
 /**
- * Date-only "No time" storage: local midnight (no clock). Legacy rows may still
- * use noon; treat both as date-only when minutes/seconds are zero.
+ * Date-only "No time" storage: midnight (no clock). Legacy rows may still use
+ * noon; treat both as date-only. When `timeZone` is set, inspect wall clock in
+ * that zone (not the host local TZ).
  */
-export function isDateOnlyAnchor(iso: string): boolean {
+export function isDateOnlyAnchor(iso: string, timeZone?: string | null): boolean {
   try {
+    const zone =
+      timeZone && timeZone.trim() && timeZone !== 'system' ? timeZone.trim() : null
+    if (zone) {
+      const hm = formatInTimeZone(parseISO(iso), zone, 'HH:mm:ss')
+      return hm === '00:00:00'
+    }
     const d = parseISO(iso)
     const h = d.getHours()
-    return (h === 0 || h === 12) && d.getMinutes() === 0 && d.getSeconds() === 0
+    return h === 0 && d.getMinutes() === 0 && d.getSeconds() === 0
   } catch {
     return false
   }
@@ -32,10 +39,13 @@ export function isDateOnlyAnchor(iso: string): boolean {
  * Time-tab "No time": due date without a clock, not a TickTick all-day event.
  * Legacy rows used `is_all_day` + no start for the same meaning.
  */
-export function isDateOnlySchedule(input: DueScheduleFields): boolean {
+export function isDateOnlySchedule(
+  input: DueScheduleFields,
+  timeZone?: string | null,
+): boolean {
   if (!input.due_date || input.start_date) return false
   if (input.is_all_day) return true
-  return isDateOnlyAnchor(input.due_date)
+  return isDateOnlyAnchor(input.due_date, timeZone)
 }
 
 /** Duration-tab "All day" — TickTick all-day event with start + due. */
