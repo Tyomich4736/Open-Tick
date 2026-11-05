@@ -10,7 +10,7 @@ import { useTimeFormat } from '@/hooks/useTimeFormat'
 import {
   combineLocalDateTime,
   formatScheduleLabel,
-  isTimedDuration,
+  isDurationSchedule,
   presetDueIso,
   toDateInputValue,
   toTimeInputValue,
@@ -42,10 +42,18 @@ const POPOVER_WIDTH = 236
 
 export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminderFieldProps) {
   const [open, setOpen] = useState(false)
+  /** Which all-day date the calendar edits (TickTick-style from/to). */
+  const [allDayEdit, setAllDayEdit] = useState<'start' | 'end'>('start')
   const buttonRef = useRef<HTMLButtonElement>(null)
   const { timeFormat } = useTimeFormat()
 
-  const mode: PickerMode = isTimedDuration(value.start_date, value.due_date) ? 'duration' : 'time'
+  const mode: PickerMode = isDurationSchedule(
+    value.start_date,
+    value.due_date,
+    value.is_all_day,
+  )
+    ? 'duration'
+    : 'time'
 
   const rangeError = useMemo(() => {
     if (!value.start_date || !value.due_date || value.is_all_day) return null
@@ -74,19 +82,22 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
         ? reminderLabel(value.reminders[0])
         : `${value.reminders.length} reminders`
 
-  /** Shared calendar day for duration (end always uses start's date). */
+  const todayStr = toDateInputValue(new Date().toISOString())
+
+  /** Shared calendar day for timed duration (end stays on start's day). */
   const durationDateStr =
-    toDateInputValue(value.start_date) ||
-    toDateInputValue(value.due_date) ||
-    toDateInputValue(new Date().toISOString())
+    toDateInputValue(value.start_date) || toDateInputValue(value.due_date) || todayStr
+
+  const allDayStartStr = toDateInputValue(value.start_date) || durationDateStr
+  const allDayEndStr = toDateInputValue(value.due_date) || allDayStartStr
 
   const setMode = (next: PickerMode) => {
     if (next === 'time') {
+      // Duration → Time: drop start. All-day event becomes date-only ("No time").
       onChange({ ...value, start_date: null })
       return
     }
-    const dateStr =
-      toDateInputValue(value.due_date) || toDateInputValue(new Date().toISOString())
+    const dateStr = toDateInputValue(value.due_date) || todayStr
     const endTime = value.is_all_day ? null : toTimeInputValue(value.due_date) || '10:00'
     let startTime: string | null = null
     if (!value.is_all_day) {
@@ -96,6 +107,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
     }
     const nextValue: ScheduleValue = {
       ...value,
+      // Date-only → all-day event keeps is_all_day and gains start (= due day)
       start_date: combineLocalDateTime(dateStr, startTime, value.is_all_day),
       due_date: combineLocalDateTime(dateStr, endTime, value.is_all_day),
     }
@@ -115,14 +127,36 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
     })
   }
 
-  const setDurationDate = (dateStr: string) => {
-    const startTime = value.is_all_day ? null : toTimeInputValue(value.start_date) || '09:00'
-    const endTime = value.is_all_day ? null : toTimeInputValue(value.due_date) || '10:00'
+  const setTimedDurationDate = (dateStr: string) => {
+    const startTime = toTimeInputValue(value.start_date) || '09:00'
+    const endTime = toTimeInputValue(value.due_date) || '10:00'
     onChange({
       ...value,
-      start_date: combineLocalDateTime(dateStr, startTime, value.is_all_day),
-      due_date: combineLocalDateTime(dateStr, endTime, value.is_all_day),
-      reminders: value.is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
+      start_date: combineLocalDateTime(dateStr, startTime, false),
+      due_date: combineLocalDateTime(dateStr, endTime, false),
+      reminders: ensureAtDueReminder(value.reminders),
+    })
+  }
+
+  const setAllDayStartDate = (dateStr: string) => {
+    let endStr = allDayEndStr
+    if (endStr < dateStr) endStr = dateStr
+    onChange({
+      ...value,
+      is_all_day: true,
+      start_date: combineLocalDateTime(dateStr, null, true),
+      due_date: combineLocalDateTime(endStr, null, true),
+    })
+  }
+
+  const setAllDayEndDate = (dateStr: string) => {
+    let startStr = allDayStartStr
+    if (dateStr < startStr) startStr = dateStr
+    onChange({
+      ...value,
+      is_all_day: true,
+      start_date: combineLocalDateTime(startStr, null, true),
+      due_date: combineLocalDateTime(dateStr, null, true),
     })
   }
 
@@ -136,7 +170,7 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
       })
       return
     }
-    const dateStr = toDateInputValue(value.due_date) || toDateInputValue(new Date().toISOString())
+    const dateStr = toDateInputValue(value.due_date) || todayStr
     onChange({
       ...value,
       is_all_day: false,
@@ -163,52 +197,56 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
     })
   }
 
-  const setAllDay = (is_all_day: boolean) => {
-    // Leaving all-day: don't reuse the all-day anchor clock (often 00:00 / 12:00).
-    const leaveAllDay = value.is_all_day && !is_all_day
+  /**
+   * Duration "All day" → TickTick all-day event (start + due kept).
+   * Time "No time" → date-only deadline (due only, no start, no clock).
+   */
+  const setDateOnlyOrAllDay = (enabled: boolean) => {
+    const leaving = value.is_all_day && !enabled
     if (mode === 'duration') {
       onChange({
         ...value,
-        is_all_day,
+        is_all_day: enabled,
         start_date: combineLocalDateTime(
-          durationDateStr,
-          is_all_day
+          allDayStartStr || durationDateStr,
+          enabled
             ? null
-            : leaveAllDay
+            : leaving
               ? '09:00'
               : toTimeInputValue(value.start_date) || '09:00',
-          is_all_day,
+          enabled,
         ),
         due_date: combineLocalDateTime(
-          durationDateStr,
-          is_all_day
+          allDayEndStr || durationDateStr,
+          enabled
             ? null
-            : leaveAllDay
+            : leaving
               ? '10:00'
               : toTimeInputValue(value.due_date) || '10:00',
-          is_all_day,
+          enabled,
         ),
-        reminders: is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
+        reminders: enabled ? value.reminders : ensureAtDueReminder(value.reminders),
       })
       return
     }
-    const dueDate = toDateInputValue(value.due_date)
+    // No time: date only — never keep start_date
+    const dueDate = toDateInputValue(value.due_date) || (enabled ? todayStr : '')
     onChange({
       ...value,
-      is_all_day,
+      is_all_day: enabled,
       due_date: dueDate
         ? combineLocalDateTime(
             dueDate,
-            is_all_day
+            enabled
               ? null
-              : leaveAllDay
+              : leaving
                 ? '09:00'
                 : toTimeInputValue(value.due_date) || '09:00',
-            is_all_day,
+            enabled,
           )
         : value.due_date,
       start_date: null,
-      reminders: is_all_day ? value.reminders : ensureAtDueReminder(value.reminders),
+      reminders: enabled ? value.reminders : ensureAtDueReminder(value.reminders),
     })
   }
 
@@ -216,12 +254,20 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
     const due = presetDueIso(preset, value.is_all_day)
     const dateStr = toDateInputValue(due)
     if (mode === 'duration') {
-      const startTime = value.is_all_day ? null : toTimeInputValue(value.start_date) || '09:00'
-      const endTime = value.is_all_day ? null : toTimeInputValue(value.due_date) || '10:00'
+      if (value.is_all_day) {
+        onChange({
+          ...value,
+          start_date: combineLocalDateTime(dateStr, null, true),
+          due_date: combineLocalDateTime(dateStr, null, true),
+        })
+        return
+      }
+      const startTime = toTimeInputValue(value.start_date) || '09:00'
+      const endTime = toTimeInputValue(value.due_date) || '10:00'
       onChange({
         ...value,
-        start_date: combineLocalDateTime(dateStr, startTime, value.is_all_day),
-        due_date: combineLocalDateTime(dateStr, endTime, value.is_all_day),
+        start_date: combineLocalDateTime(dateStr, startTime, false),
+        due_date: combineLocalDateTime(dateStr, endTime, false),
       })
       return
     }
@@ -329,10 +375,44 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
           </button>
         </div>
 
-        <CalendarPicker
-          value={mode === 'duration' ? durationDateStr : toDateInputValue(value.due_date)}
-          onChange={mode === 'duration' ? setDurationDate : setPointDate}
-        />
+        {mode === 'duration' && value.is_all_day ? (
+          <>
+            <div className="mb-2 grid grid-cols-2 gap-1">
+              {(
+                [
+                  ['start', 'From', allDayStartStr],
+                  ['end', 'To', allDayEndStr],
+                ] as const
+              ).map(([key, text, dateStr]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAllDayEdit(key)}
+                  className={[
+                    'rounded-md border px-1.5 py-1 text-left transition-colors',
+                    allDayEdit === key
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border text-text-muted hover:border-accent/40',
+                  ].join(' ')}
+                >
+                  <span className="block text-[10px] font-medium opacity-80">{text}</span>
+                  <span className="block truncate text-[11px] text-text-primary">
+                    {dateStr || 'Set date'}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <CalendarPicker
+              value={allDayEdit === 'start' ? allDayStartStr : allDayEndStr}
+              onChange={allDayEdit === 'start' ? setAllDayStartDate : setAllDayEndDate}
+            />
+          </>
+        ) : (
+          <CalendarPicker
+            value={mode === 'duration' ? durationDateStr : toDateInputValue(value.due_date)}
+            onChange={mode === 'duration' ? setTimedDurationDate : setPointDate}
+          />
+        )}
 
         {!value.is_all_day &&
           (mode === 'duration' ? (
@@ -373,10 +453,10 @@ export function DateTimeReminderField({ value, onChange, chip }: DateTimeReminde
             <input
               type="checkbox"
               checked={value.is_all_day}
-              onChange={(e) => setAllDay(e.target.checked)}
+              onChange={(e) => setDateOnlyOrAllDay(e.target.checked)}
               className="rounded border-border"
             />
-            All day
+            {mode === 'duration' ? 'All day' : 'No time'}
           </label>
         </div>
 

@@ -277,8 +277,13 @@ export function normalizeRemoteSchedule(
     const startMs = Date.parse(start)
     const dueMs = Date.parse(due)
     if (Number.isFinite(startMs) && Number.isFinite(dueMs) && Math.abs(startMs - dueMs) < 60_000) {
-      const point = isAllDay ? normalizeAllDayInstant(due, timeZone) : toUtcIso(due)
-      return { due_date: point, start_date: null }
+      // Timed point: TickTick often mirrors start into due — store due-only.
+      // All-day with start+due (even same day) is an all-day event, not date-only.
+      if (isAllDay) {
+        const point = normalizeAllDayInstant(due, timeZone)
+        return { due_date: point, start_date: point }
+      }
+      return { due_date: toUtcIso(due), start_date: null }
     }
   } catch {
     /* fall through */

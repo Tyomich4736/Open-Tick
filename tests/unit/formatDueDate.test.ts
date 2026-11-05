@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addDays, format, startOfDay } from 'date-fns'
-import { formatDayPart, formatDueDate } from '../../src/lib/formatDueDate'
+import {
+  formatDayPart,
+  formatDueDate,
+  formatDueRange,
+  isDurationSchedule,
+} from '../../src/lib/formatDueDate'
 
 describe('formatDayPart / timed due labels', () => {
   beforeEach(() => {
@@ -40,5 +45,40 @@ describe('formatDayPart / timed due labels', () => {
 
     const laterLabel = formatDueDate('2026-11-10T09:00:00', false, '24h')
     expect(laterLabel).toBe('Nov 10, 09:00')
+  })
+})
+
+describe('isDurationSchedule / all-day vs date-only', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 9, 31, 12, 0, 0)) // Sat Oct 31 2026
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('treats same-day all-day with start as duration (All day)', () => {
+    const noon = '2026-11-02T12:00:00.000Z'
+    expect(isDurationSchedule(noon, noon, true)).toBe(true)
+  })
+
+  it('treats date-only (no start) as not duration (No time)', () => {
+    expect(isDurationSchedule(null, '2026-11-02T12:00:00.000Z', true)).toBe(false)
+  })
+
+  it('labels same-day all-day as a day without a clock', () => {
+    const noon = new Date(2026, 10, 2, 12, 0, 0).toISOString()
+    expect(
+      formatDueRange({ due_date: noon, start_date: noon, is_all_day: true }, '24h'),
+    ).toBe('Mon')
+  })
+
+  it('labels multi-day all-day as a day range', () => {
+    const start = new Date(2026, 10, 2, 12, 0, 0).toISOString()
+    const end = new Date(2026, 10, 4, 12, 0, 0).toISOString()
+    expect(
+      formatDueRange({ due_date: end, start_date: start, is_all_day: true }, '24h'),
+    ).toBe('Mon – Wed')
   })
 })

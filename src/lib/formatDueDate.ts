@@ -48,7 +48,7 @@ export function formatDueDate(
   }
 }
 
-/** True when start/due represent a real range (not the same point-in-time). */
+/** True when start/due represent a real timed range (not the same point-in-time). */
 export function isTimedDuration(
   startDate: string | null | undefined,
   dueDate: string | null | undefined,
@@ -65,6 +65,20 @@ export function isTimedDuration(
   }
 }
 
+/**
+ * Duration schedule (Time tab vs Duration tab).
+ * All-day events keep start+due even on the same day; date-only "No time" has no start.
+ */
+export function isDurationSchedule(
+  startDate: string | null | undefined,
+  dueDate: string | null | undefined,
+  isAllDay = false,
+): boolean {
+  if (!startDate || !dueDate) return false
+  if (isAllDay) return true
+  return isTimedDuration(startDate, dueDate)
+}
+
 /** Point or duration range label for list chips and calendar. */
 export function formatDueRange(
   input: {
@@ -76,7 +90,7 @@ export function formatDueRange(
 ): string | null {
   if (!input.due_date) return null
   const start = input.start_date
-  if (!start || !isTimedDuration(start, input.due_date)) {
+  if (!start || !isDurationSchedule(start, input.due_date, input.is_all_day)) {
     return formatDueDate(input.due_date, input.is_all_day, timeFormat)
   }
 

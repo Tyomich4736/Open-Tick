@@ -115,7 +115,7 @@ describe('sync mappers', () => {
     expect(task.due_date).toBe('2026-09-03T12:00:00.000Z')
   })
 
-  it('maps TickTick all-day midnight-in-TZ to noon on that calendar day', () => {
+  it('maps TickTick all-day midnight-in-TZ to noon and keeps start for all-day events', () => {
     // 2026-09-20T21:00:00Z = 2026-09-21 00:00 Europe/Minsk → all-day Sep 21
     const task = remoteTaskToLocal({
       id: 't3',
@@ -127,8 +127,23 @@ describe('sync mappers', () => {
       timeZone: 'Europe/Minsk',
     })
     expect(task.is_all_day).toBe(true)
-    expect(task.start_date).toBeNull()
+    // Same-day all-day keeps start so Duration/All day ≠ date-only "No time"
+    expect(task.start_date).toBe('2026-09-21T09:00:00.000Z')
     // Noon Minsk on Sep 21 = 09:00 UTC
+    expect(task.due_date).toBe('2026-09-21T09:00:00.000Z')
+  })
+
+  it('maps all-day with only dueDate as date-only (no start)', () => {
+    const task = remoteTaskToLocal({
+      id: 't3b',
+      projectId: 'p1',
+      title: 'Due someday',
+      dueDate: '2026-09-20T21:00:00.000+0000',
+      isAllDay: true,
+      timeZone: 'Europe/Minsk',
+    })
+    expect(task.is_all_day).toBe(true)
+    expect(task.start_date).toBeNull()
     expect(task.due_date).toBe('2026-09-21T09:00:00.000Z')
   })
 
