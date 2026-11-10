@@ -64,14 +64,33 @@ function addonPresent() {
   )
 }
 
+/** True when the addon actually loads in this Node process (catches stale Electron ABI). */
+function nodeAddonLoads() {
+  try {
+    requireFromRoot('better-sqlite3')
+    return true
+  } catch {
+    return false
+  }
+}
+
 const wanted = desiredStamp()
-if (readStamp() === wanted && addonPresent()) {
+const stampOk = readStamp() === wanted && addonPresent()
+if (target === 'node') {
+  if (stampOk && nodeAddonLoads()) process.exit(0)
+} else if (stampOk) {
   process.exit(0)
 }
 
 if (target === 'node') {
   console.log('Rebuilding better-sqlite3 for Node (tests)…')
   run('npm', ['rebuild', 'better-sqlite3'])
+  if (!nodeAddonLoads()) {
+    console.error(
+      'better-sqlite3 still fails to load for Node after rebuild (wrong ABI or blocked install scripts).',
+    )
+    process.exit(1)
+  }
 } else {
   console.log('Rebuilding better-sqlite3 for Electron…')
   run('npm', ['run', 'rebuild:native'])

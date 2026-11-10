@@ -19,12 +19,21 @@ export function mapRemotePriority(value: number | undefined): Priority {
 }
 
 export function mapRemoteStatus(value: number | undefined): 'pending' | 'completed' {
-  return value === 2 ? 'completed' : 'pending'
+  // Open API docs: 0 pending, 2 completed. Some payloads also use 1 for completed.
+  return value === 2 || value === 1 ? 'completed' : 'pending'
 }
 
-/** Prefer explicit status; `/task/completed` rows also carry completedTime. */
+/**
+ * Prefer explicit status when present.
+ * Active recurring masters often keep a stale `completedTime` from a prior cycle
+ * while `status` stays 0 — do not treat that as completed.
+ * `/task/completed` rows may omit status and only send `completedTime`.
+ */
 export function remoteTaskIsCompleted(remote: Pick<RemoteTask, 'status' | 'completedTime'>): boolean {
-  return mapRemoteStatus(remote.status) === 'completed' || Boolean(remote.completedTime)
+  if (typeof remote.status === 'number') {
+    return mapRemoteStatus(remote.status) === 'completed'
+  }
+  return Boolean(remote.completedTime)
 }
 
 export function mapRemoteViewMode(value: string | undefined): ProjectViewMode {

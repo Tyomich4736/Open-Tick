@@ -92,6 +92,32 @@ describe('sync mappers', () => {
     expect(task.completed_at).toBe('2026-10-30T10:00:00.000+0000')
   })
 
+  it('keeps recurring masters pending when status is 0 despite stale completedTime', () => {
+    const task = remoteTaskToLocal({
+      id: 't-repeat',
+      projectId: 'p1',
+      title: 'CGM Refinement',
+      status: 0,
+      dueDate: '2026-11-12T12:00:00+01:00',
+      completedTime: '2026-06-11T08:00:03.000+0000',
+      repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TH',
+    })
+    expect(task.status).toBe('pending')
+    expect(task.completed_at).toBeNull()
+    expect(task.recurrence_rule?.frequency).toBe('weekly')
+  })
+
+  it('treats status 1 as completed', () => {
+    const task = remoteTaskToLocal({
+      id: 't-status-1',
+      projectId: 'p1',
+      title: 'Done via status 1',
+      status: 1,
+      completedTime: '2026-10-30T10:00:00.000+0000',
+    })
+    expect(task.status).toBe('completed')
+  })
+
   it('collapses TickTick point-in-time start===due to due-only (UTC Z)', () => {
     expect(
       normalizeRemoteSchedule('2026-09-03T15:00:00+03:00', '2026-09-03T15:00:00+03:00'),
