@@ -1,3 +1,4 @@
+import { isAllDayEvent, isDateOnlySchedule } from '@shared/dueSchedule'
 import type { Priority, ProjectViewMode } from '@shared/entities'
 import { preserveMarkdownBlankLines, toTickTickContent } from '@shared/markdownBlankLines'
 import type { RecurrenceRule, ReminderInput } from '@shared/recurrence'
@@ -407,15 +408,27 @@ export function localTaskToRemote(input: {
 }): Record<string, unknown> {
   // TickTick only hides the clock with isAllDay. Date-only ("No time") = isAllDay
   // + due only; Duration "All day" = isAllDay + start + due.
-  const isDateOnly = Boolean(input.due_date) && !input.start_date
-  const isAllDayEvent = Boolean(input.is_all_day && input.start_date)
+  // Timed point tasks also have due + null start — do NOT treat those as date-only.
+  const dateOnly = isDateOnlySchedule(
+    {
+      due_date: input.due_date,
+      start_date: input.start_date,
+      is_all_day: input.is_all_day,
+    },
+    input.time_zone,
+  )
+  const allDayEvent = isAllDayEvent({
+    due_date: input.due_date,
+    start_date: input.start_date,
+    is_all_day: input.is_all_day,
+  })
   const payload: Record<string, unknown> = {
     title: input.title,
     projectId: input.projectRemoteId,
     content: toTickTickContent(input.content || ''),
     priority: input.priority,
     status: input.status === 'completed' ? 2 : 0,
-    isAllDay: isAllDayEvent || isDateOnly,
+    isAllDay: allDayEvent || dateOnly,
     sortOrder: input.sort_order,
     kind: 'TEXT',
   }
