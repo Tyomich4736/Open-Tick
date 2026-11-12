@@ -352,4 +352,126 @@ describe('TaskRepository', () => {
     expect(updated.recurrence_rule).toBeNull()
     expect(updated.recurrence_parent_id).toBe(task.id)
   })
+
+  it('bulkComplete completes and uncompletes unique ids; skips missing', () => {
+    const inbox = repos.projects.ensureInbox()
+    const a = repos.tasks.create({ title: 'A', project_id: inbox.id })
+    const b = repos.tasks.create({ title: 'B', project_id: inbox.id })
+    const c = repos.tasks.create({ title: 'C', project_id: inbox.id })
+
+    repos.tasks.bulkComplete([a.id, b.id, a.id, 'missing-id'], true)
+    expect(repos.tasks.getById(a.id)?.status).toBe('completed')
+    expect(repos.tasks.getById(b.id)?.status).toBe('completed')
+    expect(repos.tasks.getById(c.id)?.status).toBe('pending')
+
+    repos.tasks.bulkComplete([a.id, b.id], false)
+    expect(repos.tasks.getById(a.id)?.status).toBe('pending')
+    expect(repos.tasks.getById(b.id)?.status).toBe('pending')
+  })
+
+  it('bulkUpdate sets priority, due, project, and remove_tags; skips missing ids', () => {
+    const inbox = repos.projects.ensureInbox()
+    const work = repos.projects.create({ name: 'Work' })
+    const a = repos.tasks.create({
+      title: 'A',
+      project_id: inbox.id,
+      tags: ['keep', 'drop'],
+    })
+    const b = repos.tasks.create({ title: 'B', project_id: inbox.id, tags: ['drop'] })
+    const due = '2026-11-15T12:00:00.000Z'
+
+    repos.tasks.bulkUpdate([a.id, b.id, a.id, 'missing-id'], {
+      priority: 5,
+      due_date: due,
+      project_id: work.id,
+      remove_tags: ['drop'],
+    })
+
+    const a2 = repos.tasks.getById(a.id)!
+    const b2 = repos.tasks.getById(b.id)!
+    expect(a2.priority).toBe(5)
+    expect(a2.due_date).toBe(due)
+    expect(a2.project_id).toBe(work.id)
+    expect(repos.tags.getTagsForTask(a.id)).toEqual(['keep'])
+    expect(b2.priority).toBe(5)
+    expect(b2.project_id).toBe(work.id)
+    expect(repos.tags.getTagsForTask(b.id)).toEqual([])
+  })
+
+  it('bulkDelete soft-deletes unique ids and ignores missing', () => {
+    const inbox = repos.projects.ensureInbox()
+    const a = repos.tasks.create({ title: 'A', project_id: inbox.id })
+    const b = repos.tasks.create({ title: 'B', project_id: inbox.id })
+
+    repos.tasks.bulkDelete([a.id, a.id, 'missing-id'])
+    expect(repos.tasks.getById(a.id)).toBeNull()
+    expect(repos.tasks.getById(b.id)?.title).toBe('B')
+    expect(repos.tasks.list({ project_id: inbox.id }).map((t) => t.id)).toEqual([b.id])
+  })
+
+  it('spawns next occurrence with same section_id and parent_id', () => {
+    const project = repos.projects.create({ name: 'Work' })
+    const doing = repos.sections.create({ project_id: project.id, name: 'Doing' })
+    const parent = repos.tasks.create({
+      title: 'Parent',
+      project_id: project.id,
+      section_id: doing.id,
+    })
+    const due = '2026-08-28T12:00:00.000Z'
+    const task = repos.tasks.create({
+      title: 'Daily under parent',
+      project_id: project.id,
+      parent_id: parent.id,
+      section_id: doing.id,
+      due_date: due,
+      recurrence_rule: defaultRecurrence('daily'),
+    })
+
+    repos.tasks.complete(task.id)
+
+    const nextList = repos.tasks.list({ parent_id: parent.id, status: 'pending' })
+    expect(nextList).toHaveLength(1)
+    expect(nextList[0]!.id).not.toBe(task.id)
+    const next = repos.tasks.getById(nextList[0]!.id)!
+    expect(next.parent_id).toBe(parent.id)
+    expect(next.section_id).toBe(doing.id)
+    expect(repos.tasks.getById(task.id)?.status).toBe('completed')
+  })
+
+  it('applyRemoteCompletion on recurring does not spawn a next occurrence', () => {
+    const inbox = repos.projects.ensureInbox()
+    const task = repos.tasks.create({
+      title: 'Remote daily',
+      project_id: inbox.id,
+      due_date: '2026-08-28T12:00:00.000Z',
+      recurrence_rule: defaultRecurrence('daily'),
+    })
+    repos.tasks.markSynced(task.id, 'remote-daily')
+
+    repos.tasks.applyRemoteCompletion(task.id, '2026-08-28T13:00:00.000Z')
+
+    expect(repos.tasks.getById(task.id)?.status).toBe('completed')
+    expect(repos.tasks.list({ project_id: inbox.id, status: 'pending' })).toHaveLength(0)
+    expect(repos.tasks.list({ project_id: inbox.id, include_completed: true })).toHaveLength(1)
+  })
+
+  it('filters next 7 days smart list (today through +7, not overdue or +8)', () => {
+    const inbox = repos.projects.ensureInbox()
+    const now = Date.now()
+    const yesterday = new Date(now - 24 * 60 * 60 * 1000).toISOString()
+    const today = new Date(now).toISOString()
+    const inThree = new Date(now + 3 * 24 * 60 * 60 * 1000).toISOString()
+    const inSeven = new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString()
+    const inEight = new Date(now + 8 * 24 * 60 * 60 * 1000).toISOString()
+
+    repos.tasks.create({ title: 'Overdue', project_id: inbox.id, due_date: yesterday })
+    repos.tasks.create({ title: 'Today', project_id: inbox.id, due_date: today })
+    repos.tasks.create({ title: 'In 3', project_id: inbox.id, due_date: inThree })
+    repos.tasks.create({ title: 'In 7', project_id: inbox.id, due_date: inSeven })
+    repos.tasks.create({ title: 'In 8', project_id: inbox.id, due_date: inEight })
+    repos.tasks.create({ title: 'Undated', project_id: inbox.id })
+
+    const week = repos.tasks.list({ smart_list: 'week' }).map((t) => t.title).sort()
+    expect(week).toEqual(['In 3', 'In 7', 'Today'])
+  })
 })

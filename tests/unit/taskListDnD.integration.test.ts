@@ -141,6 +141,39 @@ function applyPlan(repos: Repositories, plan: Parameters<typeof persistTaskDropP
   })
 }
 
+function applyPlanTracked(repos: Repositories, plan: Parameters<typeof persistTaskDropPlan>[0]) {
+  const calls = { reorder: 0, update: 0 }
+  persistTaskDropPlan(plan, {
+    reorder: (ids) => {
+      calls.reorder += 1
+      repos.tasks.reorder(ids)
+    },
+    update: (id, input) => {
+      calls.update += 1
+      repos.tasks.update(id, input)
+    },
+  })
+  return calls
+}
+
+function snapshotList(repos: Repositories, projectId: string) {
+  const roots = readRoots(repos, projectId).map((t) => ({
+    id: t.id,
+    parent_id: null as string | null,
+    section_id: t.section_id,
+    sort_order: repos.tasks.getById(t.id)!.sort_order,
+  }))
+  const children = roots.flatMap((r) =>
+    readChildren(repos, r.id).map((t) => ({
+      id: t.id,
+      parent_id: r.id as string | null,
+      section_id: t.section_id,
+      sort_order: repos.tasks.getById(t.id)!.sort_order,
+    })),
+  )
+  return [...roots, ...children]
+}
+
 describe('task list DnD integration', () => {
   let repos: Repositories
   let seed: Seed
@@ -152,6 +185,84 @@ describe('task list DnD integration', () => {
 
   afterEach(() => {
     closeDatabaseInstance(repos.db)
+  })
+
+  describe('guards / noops', () => {
+    it('noop does not mutate DB or call reorder/update', () => {
+      const ctx = dndContext(repos, seed.projectId)
+      const before = snapshotList(repos, seed.projectId)
+
+      const selfDrop = planRowDrop({
+        movingId: seed.todo1,
+        targetId: seed.todo1,
+        position: 'before',
+        crossSection: false,
+        sectionId: undefined,
+        fromParentId: null,
+        targetParentId: null,
+        rootIds: ctx.rootIds,
+        getChildIds: ctx.getChildIds,
+        parentById: ctx.parentById,
+      })
+      expect(selfDrop).toEqual({ type: 'noop' })
+      expect(applyPlanTracked(repos, selfDrop)).toEqual({ reorder: 0, update: 0 })
+
+      const alreadyLast = planSectionDrop({
+        movingId: seed.todo2,
+        sectionId: seed.todoId,
+        fromParentId: null,
+        fromSectionId: seed.todoId,
+        rootIds: ctx.rootIds,
+        sectionIdOf: ctx.sectionIdOf,
+      })
+      expect(alreadyLast).toEqual({ type: 'noop' })
+      expect(applyPlanTracked(repos, alreadyLast)).toEqual({ reorder: 0, update: 0 })
+
+      const nestUnderOwnChild = planRowDrop({
+        movingId: seed.parent,
+        targetId: seed.child1,
+        position: 'into',
+        crossSection: false,
+        sectionId: undefined,
+        fromParentId: null,
+        targetParentId: seed.parent,
+        rootIds: ctx.rootIds,
+        getChildIds: ctx.getChildIds,
+        parentById: ctx.parentById,
+      })
+      expect(nestUnderOwnChild).toEqual({ type: 'noop' })
+      expect(applyPlanTracked(repos, nestUnderOwnChild)).toEqual({ reorder: 0, update: 0 })
+
+      expect(snapshotList(repos, seed.projectId)).toEqual(before)
+    })
+
+    it('cross-section into never nests — relocates as root in target section', () => {
+      const ctx = dndContext(repos, seed.projectId)
+      const plan = planRowDrop({
+        movingId: seed.todo1,
+        targetId: seed.doing1,
+        position: 'into',
+        crossSection: true,
+        sectionId: seed.doingId,
+        fromParentId: null,
+        targetParentId: null,
+        rootIds: ctx.rootIds,
+        getChildIds: ctx.getChildIds,
+        parentById: ctx.parentById,
+      })
+      expect(plan.type).toBe('relocate')
+      if (plan.type === 'relocate') {
+        expect(plan.toParentId).toBeNull()
+        expect(plan.sectionId).toBe(seed.doingId)
+      }
+      applyPlan(repos, plan)
+
+      const moved = repos.tasks.getById(seed.todo1)
+      expect(moved?.parent_id).toBeNull()
+      expect(moved?.section_id).toBe(seed.doingId)
+      expect(readRoots(repos, seed.projectId).map((t) => t.id)).toContain(seed.todo1)
+      expect(readChildren(repos, seed.doing1)).toHaveLength(0)
+    })
   })
 
   describe('sectioning', () => {
@@ -379,6 +490,103 @@ describe('task list DnD integration', () => {
       )
       // Children are not roots — they must not appear as section roots
       expect(groups.flatMap((g) => g.tasks.map((t) => t.id))).not.toContain(seed.child1)
+    })
+
+    it('reparents a child under another root', () => {
+      const ctx = dndContext(repos, seed.projectId)
+      const plan = planRowDrop({
+        movingId: seed.child1,
+        targetId: seed.doing1,
+        position: 'into',
+        crossSection: false,
+        sectionId: undefined,
+        fromParentId: seed.parent,
+        targetParentId: null,
+        rootIds: ctx.rootIds,
+        getChildIds: ctx.getChildIds,
+        parentById: ctx.parentById,
+      })
+      expect(plan).toEqual({
+        type: 'nest',
+        movingId: seed.child1,
+        fromParentId: seed.parent,
+        toParentId: seed.doing1,
+      })
+      applyPlan(repos, plan)
+
+      expect(repos.tasks.getById(seed.child1)?.parent_id).toBe(seed.doing1)
+      expect(readChildren(repos, seed.parent).map((t) => t.id)).toEqual([seed.child2])
+      expect(readChildren(repos, seed.doing1).map((t) => t.id)).toEqual([seed.child1])
+      expect(rootsSubtaskCount(repos, seed.projectId, seed.parent)).toBe(1)
+      expect(rootsSubtaskCount(repos, seed.projectId, seed.doing1)).toBe(1)
+      expect(readRoots(repos, seed.projectId).map((t) => t.id)).not.toContain(seed.child1)
+    })
+
+    it('nesting a parent with children keeps the subtree intact under the new parent', () => {
+      const ctx = dndContext(repos, seed.projectId)
+      const plan = planRowDrop({
+        movingId: seed.parent,
+        targetId: seed.doing1,
+        position: 'into',
+        crossSection: false,
+        sectionId: undefined,
+        fromParentId: null,
+        targetParentId: null,
+        rootIds: ctx.rootIds,
+        getChildIds: ctx.getChildIds,
+        parentById: ctx.parentById,
+      })
+      expect(plan).toEqual({
+        type: 'nest',
+        movingId: seed.parent,
+        fromParentId: null,
+        toParentId: seed.doing1,
+      })
+      applyPlan(repos, plan)
+
+      expect(repos.tasks.getById(seed.parent)?.parent_id).toBe(seed.doing1)
+      expect(repos.tasks.getById(seed.child1)?.parent_id).toBe(seed.parent)
+      expect(repos.tasks.getById(seed.child2)?.parent_id).toBe(seed.parent)
+
+      const roots = readRoots(repos, seed.projectId)
+      expect(roots.map((t) => t.id)).not.toContain(seed.parent)
+      expect(roots.map((t) => t.id)).not.toContain(seed.child1)
+      expect(roots.map((t) => t.id)).not.toContain(seed.child2)
+
+      expect(readChildren(repos, seed.doing1).map((t) => t.id)).toEqual([seed.parent])
+      expect(readChildren(repos, seed.parent).map((t) => t.id)).toEqual([
+        seed.child1,
+        seed.child2,
+      ])
+      expect(roots.find((t) => t.id === seed.doing1)?.subtask_count).toBe(1)
+    })
+
+    it('section-drop of a subtask promotes it to a root at the end of that section', () => {
+      const ctx = dndContext(repos, seed.projectId)
+      const plan = planSectionDrop({
+        movingId: seed.child1,
+        sectionId: seed.todoId,
+        fromParentId: seed.parent,
+        fromSectionId: seed.doingId,
+        rootIds: ctx.rootIds,
+        sectionIdOf: ctx.sectionIdOf,
+      })
+      expect(plan.type).toBe('relocate')
+      if (plan.type === 'relocate') {
+        expect(plan.toParentId).toBeNull()
+        expect(plan.sectionId).toBe(seed.todoId)
+      }
+      applyPlan(repos, plan)
+
+      const moved = repos.tasks.getById(seed.child1)
+      expect(moved?.parent_id).toBeNull()
+      expect(moved?.section_id).toBe(seed.todoId)
+
+      const groups = readGroups(repos, seed.projectId)
+      const todoIds = groups.find((g) => g.label === 'Todo')?.tasks.map((t) => t.id) ?? []
+      expect(todoIds).toEqual([seed.todo1, seed.todo2, seed.child1])
+      expect(readChildren(repos, seed.parent).map((t) => t.id)).toEqual([seed.child2])
+      expect(rootsSubtaskCount(repos, seed.projectId, seed.parent)).toBe(1)
     })
   })
 })
