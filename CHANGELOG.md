@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3] - 2026-11-12
+
+### Fixed
+
+- Timed due dates were incorrectly pushed to TickTick as all-day / date-only
+- Recurring tasks were wrongly marked completed on pull when a prior cycle left a stale completed time
+
 ## [1.2.2] - 2026-11-05
 
 ### Added
