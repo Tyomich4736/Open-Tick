@@ -67,7 +67,8 @@ function startOfCalendarDay(instant: Date, timeZone?: string): Date {
 
 /**
  * Instant used for due-date ordering.
- * Date-only / all-day → start of that calendar day (before timed tasks).
+ * Date-only / all-day → start of that calendar day (after timed tasks when
+ * compared via the all-day-like flag in compareByDueDate).
  * Timed point → due; timed duration → start.
  */
 export function dueSortAnchor(
@@ -78,7 +79,7 @@ export function dueSortAnchor(
   const iso = input.start_date || input.due_date
   try {
     const instant = parseISO(iso!)
-    if (input.is_all_day || isDateOnlySchedule(input)) {
+    if (input.is_all_day || isDateOnlySchedule(input, timeZone)) {
       return startOfCalendarDay(instant, timeZone)
     }
     return instant
@@ -88,8 +89,8 @@ export function dueSortAnchor(
 }
 
 /**
- * TickTick-like due ordering: dated before undated, overdue days first,
- * then by day, date-only/all-day before timed that day, then clock time.
+ * Due ordering: dated before undated, overdue days first, then by day,
+ * timed before date-only/all-day that day, then clock time.
  */
 export function compareByDueDate(
   a: DueScheduleFields & { sort_order?: number },
@@ -113,9 +114,9 @@ export function compareByDueDate(
   const byDay = compareAsc(aDay, bDay)
   if (byDay !== 0) return byDay
 
-  const aAllDayLike = a.is_all_day || isDateOnlySchedule(a)
-  const bAllDayLike = b.is_all_day || isDateOnlySchedule(b)
-  if (aAllDayLike !== bAllDayLike) return aAllDayLike ? -1 : 1
+  const aAllDayLike = a.is_all_day || isDateOnlySchedule(a, timeZone)
+  const bAllDayLike = b.is_all_day || isDateOnlySchedule(b, timeZone)
+  if (aAllDayLike !== bAllDayLike) return aAllDayLike ? 1 : -1
 
   const byTime = compareAsc(aAnchor, bAnchor)
   if (byTime !== 0) return byTime

@@ -36,24 +36,24 @@ describe('compareByDueDate', () => {
     expect(compareByDueDate(overdue, today)).toBeLessThan(0)
   })
 
-  it('puts date-only / all-day before timed tasks on the same day', () => {
+  it('puts timed tasks before date-only / all-day on the same day', () => {
     const noTime = {
-      due_date: new Date(2026, 10, 5, 0, 0, 0).toISOString(),
+      due_date: '2026-11-05T00:00:00.000Z',
       start_date: null,
       is_all_day: false,
     }
     const morning = {
-      due_date: new Date(2026, 10, 5, 9, 0, 0).toISOString(),
+      due_date: '2026-11-05T09:00:00.000Z',
       start_date: null,
       is_all_day: false,
     }
     const allDay = {
-      due_date: new Date(2026, 10, 5, 12, 0, 0).toISOString(),
-      start_date: new Date(2026, 10, 5, 12, 0, 0).toISOString(),
+      due_date: '2026-11-05T12:00:00.000Z',
+      start_date: '2026-11-05T12:00:00.000Z',
       is_all_day: true,
     }
-    expect(compareByDueDate(noTime, morning)).toBeLessThan(0)
-    expect(compareByDueDate(allDay, morning)).toBeLessThan(0)
+    expect(compareByDueDate(morning, noTime, new Date(), 'UTC')).toBeLessThan(0)
+    expect(compareByDueDate(morning, allDay, new Date(), 'UTC')).toBeLessThan(0)
   })
 
   it('orders timed tasks by start (duration) then due (point)', () => {
